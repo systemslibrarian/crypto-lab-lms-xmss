@@ -1,3 +1,28 @@
+/* ── Skip navigation ───────────────────────────────────── */
+.skip-nav {
+  position: absolute;
+  top: -9999px;
+  left: 6px;
+  background: var(--cyan);
+  color: #000;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 700;
+  z-index: 9999;
+  text-decoration: none;
+}
+
+.skip-nav:focus {
+  top: 6px;
+}
+
+/* ── Focus visible (keyboard nav) ─────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 :root {
   --bg: #080f17;
   --panel: #101d2c;
@@ -149,10 +174,17 @@ button {
   color: var(--ink);
   padding: 8px 12px;
   cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   border-color: var(--cyan);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 button.warn {
@@ -303,5 +335,41 @@ button.warn {
   .leaf-grid {
     grid-template-columns: repeat(16, minmax(0, 1fr));
     max-height: 220px;
+  }
+}
+
+@media (max-width: 600px) {
+  .shell {
+    width: 100%;
+    padding: 12px 10px 32px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .hero {
+    padding: 16px;
+  }
+
+  .leaf-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    max-height: 180px;
+  }
+
+  .leaf {
+    min-height: 22px;
+  }
+
+  .row {
+    flex-direction: column;
+  }
+
+  .controls {
+    gap: 10px;
+  }
+
+  textarea {
+    min-height: 80px;
   }
 }

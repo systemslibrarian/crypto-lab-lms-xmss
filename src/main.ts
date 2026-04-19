@@ -60,9 +60,18 @@ function persistUsedIndexes(): void {
   localStorage.setItem(usedKeyStorageName(lmsStorageKey), JSON.stringify(used));
 }
 
+function setButtonBusy(btn: HTMLButtonElement | null, busy: boolean, label?: string): void {
+  if (!btn) return;
+  btn.disabled = busy;
+  if (label) btn.textContent = busy ? label : btn.dataset.originalLabel ?? btn.textContent ?? '';
+  if (!btn.dataset.originalLabel && busy && label) btn.dataset.originalLabel = btn.textContent ?? '';
+  if (!busy) delete btn.dataset.originalLabel;
+}
+
 function setupLayout(): void {
   const app = APP as HTMLDivElement;
   app.innerHTML = `
+    <a href="#main-content" class="skip-nav">Skip to main content</a>
     <div class="shell">
       <header class="hero">
         <p class="kicker">Crypto Lab • Stateful Hash-Based Signatures</p>
@@ -70,69 +79,66 @@ function setupLayout(): void {
         <p class="lead">Every signature burns one slot forever. Reuse one index once and trust is gone.</p>
       </header>
 
-      <main class="grid">
-        <section class="panel" id="exhibit-1">
-          <h2>Exhibit 1: Merkle Tree of OTS Keys</h2>
+      <main class="grid" id="main-content">
+        <section class="panel" id="exhibit-1" aria-labelledby="h2-ex1">
+          <h2 id="h2-ex1">Exhibit 1: Merkle Tree of OTS Keys</h2>
           <p class="muted">Generate LMS_SHA256_M32_H10 (1024 signatures) and inspect each leaf state.</p>
           <div class="controls">
             <button id="btn-lms-keygen">Generate LMS Keypair</button>
-            <span id="lms-progress" class="mono">Idle</span>
+            <span id="lms-progress" class="mono" role="status" aria-live="polite" aria-label="LMS keygen progress">Idle</span>
           </div>
-          <div id="lms-pk" class="kv"></div>
-          <div id="lms-meter" class="meter"></div>
-          <div id="leaf-info" class="note">Click a leaf square to inspect its status.</div>
-          <div id="leaf-grid" class="leaf-grid"></div>
+          <div id="lms-pk" class="kv" aria-live="polite"></div>
+          <div id="lms-meter" class="meter" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Signatures used"></div>
+          <div id="leaf-info" class="note" role="status" aria-live="polite">Click a leaf square to inspect its status.</div>
+          <div id="leaf-grid" class="leaf-grid" role="grid" aria-label="LMS leaf key grid"></div>
         </section>
 
-        <section class="panel" id="exhibit-2">
-          <h2>Exhibit 2: Signing Consumes State</h2>
+        <section class="panel" id="exhibit-2" aria-labelledby="h2-ex2">
+          <h2 id="h2-ex2">Exhibit 2: Signing Consumes State</h2>
           <p class="muted">State is enforced with localStorage used-index tracking and q monotonic updates.</p>
           <div class="controls stacked">
-            <label>Message
-              <input id="lms-message" value="Firmware v2.3.1 release" />
-            </label>
+            <label for="lms-message">Message</label>
+            <input id="lms-message" value="Firmware v2.3.1 release" aria-describedby="lms-sign-status" />
             <div class="row">
               <button id="btn-lms-sign">Sign Message</button>
               <button id="btn-lms-sign-again">Sign Again</button>
             </div>
-            <label>Unsafe manual q override (demo corruption)
-              <input id="q-override" type="number" min="0" max="1023" value="0" />
-            </label>
+            <label for="q-override">Unsafe manual q override (demo corruption)</label>
+            <input id="q-override" type="number" min="0" max="1023" value="0" aria-describedby="lms-sign-status" />
             <button id="btn-q-override" class="warn">Set q Unsafely</button>
           </div>
-          <div id="lms-sign-status" class="note"></div>
-          <div id="lms-signature" class="mono sig"></div>
+          <div id="lms-sign-status" class="note" role="status" aria-live="polite"></div>
+          <div id="lms-signature" class="mono sig" aria-label="LMS signature bytes"></div>
           <div class="danger">
             <h3>Danger Zone</h3>
             <p>Exporting and reusing private state can trigger catastrophic index reuse.</p>
             <button id="btn-export-state" class="danger-btn">Export Secret State (Unsafe)</button>
-            <textarea id="export-box" readonly placeholder="Unsafe export appears here"></textarea>
+            <textarea id="export-box" readonly placeholder="Unsafe export appears here" aria-label="Exported private state — unsafe"></textarea>
           </div>
         </section>
 
-        <section class="panel" id="exhibit-3">
-          <h2>Exhibit 3: Authentication Path Walk</h2>
+        <section class="panel" id="exhibit-3" aria-labelledby="h2-ex3">
+          <h2 id="h2-ex3">Exhibit 3: Authentication Path Walk</h2>
           <p class="muted">Each LMS signature carries 10 sibling hashes to rebuild the root.</p>
-          <ol id="auth-steps" class="steps"></ol>
+          <ol id="auth-steps" class="steps" aria-live="polite"></ol>
         </section>
 
-        <section class="panel" id="exhibit-4">
-          <h2>Exhibit 4: HSS Hierarchy</h2>
+        <section class="panel" id="exhibit-4" aria-labelledby="h2-ex4">
+          <h2 id="h2-ex4">Exhibit 4: HSS Hierarchy</h2>
           <p class="muted">Root H=5 signs leaf-tree public keys; each leaf tree signs up to 1024 messages.</p>
           <div class="controls stacked">
             <button id="btn-hss-keygen">Generate HSS Keypair</button>
-            <span id="hss-progress" class="mono">Idle</span>
-            <label>Message
-              <input id="hss-message" value="Signed boot manifest" />
-            </label>
+            <span id="hss-progress" class="mono" role="status" aria-live="polite" aria-label="HSS keygen progress">Idle</span>
+            <label for="hss-message">Message</label>
+            <input id="hss-message" value="Signed boot manifest" />
             <button id="btn-hss-sign">Sign with HSS</button>
           </div>
-          <div id="hss-state" class="kv"></div>
-          <div id="hss-sig" class="mono sig"></div>
+          <div id="hss-state" class="kv" aria-live="polite"></div>
+          <div id="hss-sig" class="mono sig" role="status" aria-live="polite" aria-label="HSS signature result"></div>
         </section>
 
-        <section class="panel" id="exhibit-5">
-          <h2>Exhibit 5: When Stateful Signatures Win</h2>
+        <section class="panel" id="exhibit-5" aria-labelledby="h2-ex5">
+          <h2 id="h2-ex5">Exhibit 5: When Stateful Signatures Win</h2>
           <div class="decision mono">
             Need PQ signatures?
             Yes -> Need unlimited signatures?
@@ -177,7 +183,9 @@ function renderLmsPublic(): void {
 
   const meter = document.querySelector<HTMLDivElement>('#lms-meter');
   if (meter) {
-    meter.innerHTML = `<div class="fill" style="width:${Math.min(100, Math.max(0, pctUsed))}%"></div>`;
+    const pct = Math.min(100, Math.max(0, pctUsed));
+    meter.setAttribute('aria-valuenow', String(Math.round(pct)));
+    meter.innerHTML = `<div class="fill" style="width:${pct}%"></div>`;
   }
 }
 
@@ -197,7 +205,8 @@ function renderLeafGrid(): void {
   for (let i = 0; i < LEAF_COUNT; i += 1) {
     const usedClass = used.has(i) ? 'used' : 'fresh';
     const currentClass = i === current ? 'current' : '';
-    fragments.push(`<button class="leaf ${usedClass} ${currentClass}" data-leaf="${i}" title="Leaf ${i}">${i % 10}</button>`);
+    const stateLabel = used.has(i) ? 'used' : i === current ? 'next signing index' : 'available';
+    fragments.push(`<button class="leaf ${usedClass} ${currentClass}" data-leaf="${i}" aria-label="Leaf ${i}: ${stateLabel}" title="Leaf ${i}: ${stateLabel}">${i % 10}</button>`);
   }
   grid.innerHTML = fragments.join('');
 }
@@ -236,38 +245,51 @@ function updateAllLmsViews(): void {
 }
 
 async function handleLmsKeygen(): Promise<void> {
+  const btn = document.querySelector<HTMLButtonElement>('#btn-lms-keygen');
   const progress = document.querySelector<HTMLSpanElement>('#lms-progress');
+  setButtonBusy(btn, true, 'Generating...');
   if (progress) {
     progress.textContent = 'Generating 1024 leaves...';
   }
 
-  const result = await lmsKeygen((computed, total) => {
-    if (progress) {
-      progress.textContent = `Leafs ${computed}/${total}`;
+  try {
+    const result = await lmsKeygen((computed, total) => {
+      if (progress) {
+        progress.textContent = `Leafs ${computed}/${total}`;
+      }
+    });
+
+    lmsPrivateKey = result.privateKey;
+    lmsPublicKey = result.publicKey;
+    lmsStorageKey = keyId(result.publicKey);
+
+    const stored = readStoredUsedIndexes();
+    lmsPrivateKey.usedIndexes = stored;
+    if (stored.size > 0) {
+      lmsPrivateKey.q = Math.max(...stored) + 1;
     }
-  });
 
-  lmsPrivateKey = result.privateKey;
-  lmsPublicKey = result.publicKey;
-  lmsStorageKey = keyId(result.publicKey);
-
-  const stored = readStoredUsedIndexes();
-  lmsPrivateKey.usedIndexes = stored;
-  if (stored.size > 0) {
-    lmsPrivateKey.q = Math.max(...stored) + 1;
+    persistUsedIndexes();
+    if (progress) {
+      progress.textContent = 'Ready';
+    }
+    updateAllLmsViews();
+  } catch (err) {
+    if (progress) {
+      progress.textContent = 'Error — see console';
+    }
+    console.error(err);
+  } finally {
+    setButtonBusy(btn, false);
   }
-
-  persistUsedIndexes();
-  if (progress) {
-    progress.textContent = 'Ready';
-  }
-  updateAllLmsViews();
 }
 
 async function handleLmsSign(repeatOnly = false): Promise<void> {
   const status = document.querySelector<HTMLDivElement>('#lms-sign-status');
   const sigBox = document.querySelector<HTMLDivElement>('#lms-signature');
   const input = document.querySelector<HTMLInputElement>('#lms-message');
+  const btnSign = document.querySelector<HTMLButtonElement>('#btn-lms-sign');
+  const btnAgain = document.querySelector<HTMLButtonElement>('#btn-lms-sign-again');
   if (!status || !sigBox || !input) {
     return;
   }
@@ -285,6 +307,8 @@ async function handleLmsSign(repeatOnly = false): Promise<void> {
     return;
   }
 
+  setButtonBusy(btnSign, true, 'Signing...');
+  setButtonBusy(btnAgain, true, 'Signing...');
   try {
     const msgBytes = textEncoder.encode(input.value);
     const { signature, qUsed, remainingSignatures } = await lmsSign(msgBytes, lmsPrivateKey);
@@ -305,6 +329,9 @@ async function handleLmsSign(repeatOnly = false): Promise<void> {
   } catch (err) {
     status.textContent = err instanceof Error ? err.message : 'Unknown signing error.';
     status.className = 'note critical';
+  } finally {
+    setButtonBusy(btnSign, false);
+    setButtonBusy(btnAgain, false);
   }
 }
 
@@ -382,39 +409,62 @@ function renderHssState(): void {
 }
 
 async function handleHssKeygen(): Promise<void> {
+  const btn = document.querySelector<HTMLButtonElement>('#btn-hss-keygen');
   const progress = document.querySelector<HTMLSpanElement>('#hss-progress');
+  setButtonBusy(btn, true, 'Generating...');
   if (progress) {
     progress.textContent = 'Generating HSS trees...';
   }
 
-  const result = await hssKeygen((stage, percent) => {
-    if (progress) {
-      progress.textContent = `${stage} ${Math.round(percent)}%`;
-    }
-  });
+  try {
+    const result = await hssKeygen((stage, percent) => {
+      if (progress) {
+        progress.textContent = `${stage} ${Math.round(percent)}%`;
+      }
+    });
 
-  hssPrivateKey = result.privateKey;
-  hssPublicKey = result.publicKey;
-  renderHssState();
-  if (progress) {
-    progress.textContent = 'Ready';
+    hssPrivateKey = result.privateKey;
+    hssPublicKey = result.publicKey;
+    renderHssState();
+    if (progress) {
+      progress.textContent = 'Ready';
+    }
+  } catch (err) {
+    if (progress) {
+      progress.textContent = 'Error — see console';
+    }
+    console.error(err);
+  } finally {
+    setButtonBusy(btn, false);
   }
 }
 
 async function handleHssSign(): Promise<void> {
   const input = document.querySelector<HTMLInputElement>('#hss-message');
   const box = document.querySelector<HTMLDivElement>('#hss-sig');
+  const btn = document.querySelector<HTMLButtonElement>('#btn-hss-sign');
   if (!input || !box || !hssPrivateKey || !hssPublicKey) {
+    if (box) {
+      box.textContent = 'Generate HSS keypair first.';
+    }
     return;
   }
 
-  const msg = textEncoder.encode(input.value);
-  const signature = await hssSign(msg, hssPrivateKey);
-  const ok = await hssVerify(msg, signature, hssPublicKey);
-  lastHssSignature = signature;
+  setButtonBusy(btn, true, 'Signing...');
+  try {
+    const msg = textEncoder.encode(input.value);
+    const signature = await hssSign(msg, hssPrivateKey);
+    const ok = await hssVerify(msg, signature, hssPublicKey);
+    lastHssSignature = signature;
 
-  renderHssState();
-  box.textContent = `${signature.length} bytes • verify=${ok ? 'valid' : 'invalid'}\n${bytesToHex(signature).slice(0, 220)}...`;
+    renderHssState();
+    box.textContent = `${signature.length} bytes • verify=${ok ? 'valid' : 'invalid'}\n${bytesToHex(signature).slice(0, 220)}...`;
+  } catch (err) {
+    box.textContent = err instanceof Error ? err.message : 'Unknown signing error.';
+    console.error(err);
+  } finally {
+    setButtonBusy(btn, false);
+  }
 }
 
 function bindEvents(): void {
