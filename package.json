@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "gate:phase1": "tsx src/gates/phase1.ts",
-    "gate:phase2": "tsx src/gates/phase2.ts"
+    "gate:phase2": "tsx src/gates/phase2.ts",
+    "gate:phase3": "tsx src/gates/phase3.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
