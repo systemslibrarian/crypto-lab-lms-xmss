@@ -1,6 +1,23 @@
 import { concatBytes, u32 } from './bytes';
-import { lmsKeygen, lmsSign, lmsVerify } from './lms';
+import { lmsKeygen, lmsSign, lmsVerify, signaturesRemaining } from './lms';
 import type { LMSPrivateKey, LMSPublicKey } from './lms';
+
+const DEFAULT_ROOT_H = 5;
+const DEFAULT_LEAF_H = 10;
+
+function encodeLmsPublicKey(levelUsed: number, key: LMSPublicKey): Uint8Array {
+  return concatBytes(u32(levelUsed), u32(key.typecode), u32(key.otsTypecode), key.I, key.T1);
+}
+
+function hFromLmsTypecode(typecode: number): number {
+  if (typecode === 0x00000005) {
+    return 5;
+  }
+  if (typecode === 0x00000006) {
+    return 10;
+  }
+  throw new Error(`Unsupported LMS typecode: 0x${typecode.toString(16)}`);
+}
 
 export interface HSSPrivateKey {
   rootLMSKey: LMSPrivateKey;
@@ -8,6 +25,8 @@ export interface HSSPrivateKey {
   activeLeafPublicKey: LMSPublicKey;
   rootSignatureOfLeaf: Uint8Array;
   levelUsed: number;
+  maxLevels: number;
+  leafHeight: number;
 }
 
 export interface HSSPublicKey {
@@ -21,37 +40,38 @@ export interface HSSPublicKey {
  *   Level 1 (leaf): H=10 (1024 signatures each)
  *   Total capacity: 32 × 1024 = 32,768 signatures
  */
-export async function hssKeygen(onProgress?: (stage: string, percent: number) => void): Promise<{
+export async function hssKeygen(
+  onProgress?: (stage: string, percent: number) => void,
+  options?: { rootH?: number; leafH?: number },
+): Promise<{
   privateKey: HSSPrivateKey;
   publicKey: HSSPublicKey;
 }> {
-  onProgress?.('Generating root LMS tree (H=5)', 0);
+  const rootH = options?.rootH ?? DEFAULT_ROOT_H;
+  const leafH = options?.leafH ?? DEFAULT_LEAF_H;
+
+  onProgress?.(`Generating root LMS tree (H=${rootH})`, 0);
   const { privateKey: rootLMSKey, publicKey: rootPublicKey } = await lmsKeygen(
     (computed, total) => {
-      onProgress?.('Root tree', (computed / total) * 10);
+      onProgress?.('Root tree', (computed / total) * 20);
     },
-    { h: 5 },
+    { h: rootH },
   );
 
-  onProgress?.('Generating first leaf LMS tree (H=10)', 20);
+  onProgress?.(`Generating first leaf LMS tree (H=${leafH})`, 25);
   const { privateKey: activeLeafLMSKey, publicKey: activeLeafPublicKey } = await lmsKeygen(
     (computed, total) => {
-      onProgress?.('Leaf tree 0', 20 + (computed / total) * 70);
+      onProgress?.('Leaf tree 0', 25 + (computed / total) * 65);
     },
-    { h: 10 },
+    { h: leafH },
   );
 
-  onProgress?.('Signing leaf public key with root tree', 90);
+  onProgress?.('Signing leaf public key with root tree', 92);
   const { signature: rootSignatureOfLeaf } = await lmsSign(
-    concatBytes(
-      u32(0),
-      u32(activeLeafPublicKey.typecode),
-      u32(activeLeafPublicKey.otsTypecode),
-      activeLeafPublicKey.I,
-      activeLeafPublicKey.T1,
-    ),
+    encodeLmsPublicKey(0, activeLeafPublicKey),
     rootLMSKey,
   );
+
   onProgress?.('Complete', 100);
 
   return {
@@ -61,6 +81,8 @@ export async function hssKeygen(onProgress?: (stage: string, percent: number) =>
       activeLeafPublicKey,
       rootSignatureOfLeaf,
       levelUsed: 0,
+      maxLevels: 1 << rootH,
+      leafHeight: leafH,
     },
     publicKey: {
       L: 2,
@@ -69,10 +91,41 @@ export async function hssKeygen(onProgress?: (stage: string, percent: number) =>
   };
 }
 
+async function rotateLeafIfNeeded(privateKey: HSSPrivateKey): Promise<void> {
+  if (signaturesRemaining(privateKey.activeLeafLMSKey) > 0) {
+    return;
+  }
+
+  if (privateKey.levelUsed + 1 >= privateKey.maxLevels) {
+    throw new Error('HSS exhausted: root key has no remaining leaf-tree slots');
+  }
+
+  if (signaturesRemaining(privateKey.rootLMSKey) <= 0) {
+    throw new Error('HSS exhausted: root LMS key exhausted');
+  }
+
+  const nextLevel = privateKey.levelUsed + 1;
+  const { privateKey: nextLeafPrivate, publicKey: nextLeafPublic } = await lmsKeygen(undefined, {
+    h: privateKey.leafHeight,
+  });
+
+  const { signature: nextRootSig } = await lmsSign(
+    encodeLmsPublicKey(nextLevel, nextLeafPublic),
+    privateKey.rootLMSKey,
+  );
+
+  privateKey.activeLeafLMSKey = nextLeafPrivate;
+  privateKey.activeLeafPublicKey = nextLeafPublic;
+  privateKey.rootSignatureOfLeaf = nextRootSig;
+  privateKey.levelUsed = nextLevel;
+}
+
 export async function hssSign(message: Uint8Array, privateKey: HSSPrivateKey): Promise<Uint8Array> {
+  await rotateLeafIfNeeded(privateKey);
+
   const leafSig = await lmsSign(message, privateKey.activeLeafLMSKey);
 
-  const hssSignature = concatBytes(
+  return concatBytes(
     u32(privateKey.levelUsed),
     privateKey.rootSignatureOfLeaf,
     u32(privateKey.activeLeafPublicKey.typecode),
@@ -81,8 +134,6 @@ export async function hssSign(message: Uint8Array, privateKey: HSSPrivateKey): P
     privateKey.activeLeafPublicKey.T1,
     leafSig.signature,
   );
-
-  return hssSignature;
 }
 
 export async function hssVerify(
@@ -90,8 +141,7 @@ export async function hssVerify(
   signature: Uint8Array,
   publicKey: HSSPublicKey,
 ): Promise<boolean> {
-  const expectedL = publicKey.L;
-  if (expectedL !== 2) {
+  if (publicKey.L !== 2) {
     return false;
   }
 
@@ -103,13 +153,18 @@ export async function hssVerify(
     signature[offset + 3];
   offset += 4;
 
-  if (levelUsed < 0 || levelUsed >= 32) {
+  if (levelUsed < 0 || levelUsed >= 0x7fffffff) {
     return false;
   }
 
-  const expectedRootSigLen = 4 + 1124 + 4 + 5 * 32;
-  const rootSig = signature.slice(offset, offset + expectedRootSigLen);
-  offset += expectedRootSigLen;
+  const rootH = hFromLmsTypecode(publicKey.rootLMSPublicKey.typecode);
+  const rootSigLen = 4 + 1124 + 4 + rootH * 32;
+  if (signature.length < offset + rootSigLen + 4 + 4 + 16 + 32) {
+    return false;
+  }
+
+  const rootSig = signature.slice(offset, offset + rootSigLen);
+  offset += rootSigLen;
 
   const leafTypecode =
     (signature[offset] << 24) |
@@ -138,16 +193,15 @@ export async function hssVerify(
     T1: leafT1,
   };
 
-  const leafSigLen = 4 + 1124 + 4 + 10 * 32;
+  const leafH = hFromLmsTypecode(leafTypecode);
+  const leafSigLen = 4 + 1124 + 4 + leafH * 32;
+  if (signature.length !== offset + leafSigLen) {
+    return false;
+  }
+
   const leafSig = signature.slice(offset, offset + leafSigLen);
 
-  const rootSigMessage = concatBytes(
-    u32(levelUsed),
-    u32(leafTypecode),
-    u32(leafOtsTypecode),
-    leafI,
-    leafT1,
-  );
+  const rootSigMessage = encodeLmsPublicKey(levelUsed, leafPublicKey);
   const rootOk = await lmsVerify(rootSigMessage, rootSig, publicKey.rootLMSPublicKey);
   if (!rootOk) {
     return false;
