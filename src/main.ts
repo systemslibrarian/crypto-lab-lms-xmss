@@ -276,7 +276,7 @@ async function handleLmsKeygen(): Promise<void> {
     updateAllLmsViews();
   } catch (err) {
     if (progress) {
-      progress.textContent = 'Error — see console';
+      progress.textContent = 'Error - see console';
     }
     console.error(err);
   } finally {
@@ -431,7 +431,7 @@ async function handleHssKeygen(): Promise<void> {
     }
   } catch (err) {
     if (progress) {
-      progress.textContent = 'Error — see console';
+      progress.textContent = 'Error - see console';
     }
     console.error(err);
   } finally {
