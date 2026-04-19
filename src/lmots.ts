@@ -34,8 +34,10 @@ async function chain(
   toExclusive: number,
 ): Promise<Uint8Array> {
   let tmp = start;
+  const prefix = concatBytes(I, u32(q), u16(i));
   for (let j = from; j < toExclusive; j += 1) {
-    tmp = await sha256(concatBytes(I, u32(q), u16(i), u8(j), tmp));
+    const input = concatBytes(prefix, u8(j), tmp);
+    tmp = await sha256(input);
   }
   return tmp;
 }
@@ -61,10 +63,14 @@ export async function lmotsKeygen(
     throw new Error('LM-OTS seed must be 32 bytes');
   }
 
-  const ys: Uint8Array[] = [];
-  for (let i = 0; i < LMOTS_PARAMS.p; i += 1) {
-    const x = await xValue(I, q, i, keySeed);
-    ys.push(await chain(I, q, i, x, 0, ITER_MAX));
+  let ys = await Promise.all(
+    Array.from({ length: LMOTS_PARAMS.p }, (_, i) => xValue(I, q, i, keySeed)),
+  );
+
+  for (let j = 0; j < ITER_MAX; j += 1) {
+    ys = await Promise.all(
+      ys.map((value, i) => sha256(concatBytes(I, u32(q), u16(i), u8(j), value))),
+    );
   }
 
   const K = await sha256(concatBytes(I, u32(q), u16(D_PBLC), ...ys));
