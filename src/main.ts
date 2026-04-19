@@ -90,7 +90,7 @@ function setupLayout(): void {
           <div id="lms-pk" class="kv" aria-live="polite"></div>
           <div id="lms-meter" class="meter" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Signatures used"></div>
           <div id="leaf-info" class="note" role="status" aria-live="polite">Click a leaf square to inspect its status.</div>
-          <div id="leaf-grid" class="leaf-grid" role="grid" aria-label="LMS leaf key grid"></div>
+          <div id="leaf-grid" class="leaf-grid" role="group" aria-label="LMS leaf key grid"></div>
         </section>
 
         <section class="panel" id="exhibit-2" aria-labelledby="h2-ex2">
@@ -130,7 +130,7 @@ function setupLayout(): void {
             <button id="btn-hss-keygen">Generate HSS Keypair</button>
             <span id="hss-progress" class="mono" role="status" aria-live="polite" aria-label="HSS keygen progress">Idle</span>
             <label for="hss-message">Message</label>
-            <input id="hss-message" value="Signed boot manifest" />
+            <input id="hss-message" value="Signed boot manifest" aria-describedby="hss-sig" />
             <button id="btn-hss-sign">Sign with HSS</button>
           </div>
           <div id="hss-state" class="kv" aria-live="polite"></div>
@@ -296,6 +296,12 @@ async function handleLmsSign(repeatOnly = false): Promise<void> {
 
   if (!lmsPrivateKey || !lmsPublicKey) {
     status.textContent = 'Generate LMS keypair first.';
+    return;
+  }
+
+  if (signaturesRemaining(lmsPrivateKey) === 0) {
+    status.textContent = 'ERROR: All 1024 signatures exhausted. Generate a new keypair.';
+    status.className = 'note critical';
     return;
   }
 
