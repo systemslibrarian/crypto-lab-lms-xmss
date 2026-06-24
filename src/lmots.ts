@@ -25,7 +25,13 @@ export async function sha256(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
-async function chain(
+/**
+ * Winternitz hash chain for OTS digit `i`: iteratively hash `start` from
+ * step `from` up to (but not including) `toExclusive`. The chain is one-way —
+ * a value at depth `d` can be advanced to any depth `>= d` but never reversed.
+ * This irreversibility is exactly what makes index reuse catastrophic (see forge.ts).
+ */
+export async function chain(
   I: Uint8Array,
   q: number,
   i: number,
@@ -112,6 +118,26 @@ export function computeChecksum(Q: Uint8Array, w: number): Uint8Array {
   return u16(shifted);
 }
 
+/**
+ * The p Winternitz digits (chain depths) signed by an LM-OTS signature:
+ * the n-byte message digest Q = H(I || q || D_MESG || C || message) with its
+ * checksum appended, split into p coefficients of w bits each. Shared by
+ * signing, verification, and the reuse-forgery attack so all three agree byte
+ * for byte on how a (C, message) pair maps to chain depths.
+ */
+export async function lmotsCoefficients(
+  I: Uint8Array,
+  q: number,
+  C: Uint8Array,
+  message: Uint8Array,
+): Promise<number[]> {
+  const Q = await sha256(concatBytes(I, u32(q), u16(D_MESG), C, message));
+  const QwithCksm = concatBytes(Q, computeChecksum(Q, LMOTS_PARAMS.w));
+  return Array.from({ length: LMOTS_PARAMS.p }, (_, i) =>
+    coefficient(QwithCksm, i, LMOTS_PARAMS.w),
+  );
+}
+
 export async function lmotsSign(
   message: Uint8Array,
   privateKey: { I: Uint8Array; q: number; seed: Uint8Array },
@@ -125,14 +151,12 @@ export async function lmotsSign(
   }
 
   const C = randomBytes(LMOTS_PARAMS.n);
-  const Q = await sha256(concatBytes(I, u32(q), u16(D_MESG), C, message));
-  const QwithCksm = concatBytes(Q, computeChecksum(Q, LMOTS_PARAMS.w));
+  const a = await lmotsCoefficients(I, q, C, message);
 
   const y: Uint8Array[] = [];
   for (let i = 0; i < LMOTS_PARAMS.p; i += 1) {
-    const a = coefficient(QwithCksm, i, LMOTS_PARAMS.w);
     const x = await xValue(I, q, i, seed);
-    y.push(await chain(I, q, i, x, 0, a));
+    y.push(await chain(I, q, i, x, 0, a[i]));
   }
 
   return concatBytes(u32(LMOTS_PARAMS.typecode), C, ...y);
@@ -187,13 +211,11 @@ export async function lmotsCandidatePublicKey(
     offset += LMOTS_PARAMS.n;
   }
 
-  const Q = await sha256(concatBytes(I, u32(q), u16(D_MESG), C, message));
-  const QwithCksm = concatBytes(Q, computeChecksum(Q, LMOTS_PARAMS.w));
+  const a = await lmotsCoefficients(I, q, C, message);
 
   const z: Uint8Array[] = [];
   for (let i = 0; i < LMOTS_PARAMS.p; i += 1) {
-    const a = coefficient(QwithCksm, i, LMOTS_PARAMS.w);
-    z.push(await chain(I, q, i, ys[i], a, ITER_MAX));
+    z.push(await chain(I, q, i, ys[i], a[i], ITER_MAX));
   }
 
   const Kc = await sha256(concatBytes(I, u32(q), u16(D_PBLC), ...z));

@@ -15,7 +15,11 @@ This project demonstrates stateful hash-based signatures in the browser:
 
 All hashing uses Web Crypto `subtle.digest('SHA-256', ...)`.
 
-The UI is built as five exhibits focused on the key operational fact most demos skip: LMS is stateful, and index reuse is catastrophic.
+The UI is built as six exhibits focused on the key operational fact most demos skip: LMS is stateful, and index reuse is catastrophic. Exhibit 3 doesn't just assert this — it mounts a **live, working forgery**: reuse one one-time-signature index a handful of times and an attacker, using only the leaked signatures, forges a brand-new message that the genuine public key accepts.
+
+## How the Forgery Works
+
+Winternitz hash chains are one-way: a chain value at depth `d` can be advanced to any depth `≥ d`, but never reversed. A single LM-OTS signature reveals, for each of the 34 positions, the chain value at the depth that message required. Reuse the same index across `k` messages and the attacker learns each position's value at the *lowest* depth seen across all of them. The checksum that normally blocks single-signature forgery is overcome by grinding the signature randomizer `C` until a chosen message's required depths all sit at or above the known depths — then each position is rebuilt by chaining forward. The result reconstructs the real public key and verifies. See `src/forge.ts`; the attack is exercised end-to-end in `src/gates/phase4.ts`.
 
 ## When to Use It
 
@@ -65,10 +69,20 @@ npm run dev
 npm run build
 ```
 
-Phase gates:
+## Tests
+
+The crypto is validated against RFC 8554 test vectors and the reuse-forgery is proven end-to-end. CI (`.github/workflows/ci.yml`) runs the type-check and the full gate suite on every push and pull request, and the GitHub Pages deploy is gated on the same checks.
 
 ```bash
-npm run gate:phase1
-npm run gate:phase2
-npm run gate:phase3
+npm test          # type-check is separate; this runs all four gates
+npm run typecheck
+```
+
+Individual phase gates:
+
+```bash
+npm run gate:phase1   # LM-OTS primitives + RFC 8554 Appendix F vector
+npm run gate:phase2   # LMS Merkle sign/verify + index-reuse refusal
+npm run gate:phase3   # HSS hierarchy, rollover, tamper rejection
+npm run gate:phase4   # live index-reuse forgery is accepted by the real key
 ```

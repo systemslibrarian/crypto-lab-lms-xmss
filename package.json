@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "typecheck": "tsc",
+    "test": "npm run gate:phase1 && npm run gate:phase2 && npm run gate:phase3 && npm run gate:phase4",
     "gate:phase1": "tsx src/gates/phase1.ts",
     "gate:phase2": "tsx src/gates/phase2.ts",
-    "gate:phase3": "tsx src/gates/phase3.ts"
+    "gate:phase3": "tsx src/gates/phase3.ts",
+    "gate:phase4": "tsx src/gates/phase4.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

@@ -323,12 +323,170 @@ button.warn {
   padding-top: 10px;
 }
 
+.span-2 {
+  grid-column: span 2;
+}
+
+/* ── Forgery exhibit ──────────────────────────────────── */
+#exhibit-forgery {
+  border-color: var(--red);
+  background: linear-gradient(180deg, #1a1320, #201526);
+}
+
+input[type='range'] {
+  accent-color: var(--red);
+  padding: 0;
+  width: 100%;
+}
+
+.reach {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #0a1320;
+}
+
+.reach-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.reach-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.reach-name {
+  flex: 0 0 90px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.reach-bar {
+  flex: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: #11202f;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.reach-fill {
+  height: 100%;
+  width: 0;
+  transition: width 0.5s ease;
+}
+
+.reach-fill.single {
+  background: linear-gradient(90deg, #2f5679, var(--cyan));
+}
+
+.reach-fill.many {
+  background: linear-gradient(90deg, var(--amber), var(--red));
+}
+
+.reach-pct {
+  flex: 0 0 52px;
+  text-align: right;
+  font-size: 0.82rem;
+}
+
+.verdict {
+  margin-top: 12px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.verdict:empty {
+  display: none;
+}
+
+.verdict.bad {
+  background: rgba(255, 51, 102, 0.16);
+  border: 1px solid var(--red);
+  color: #ffd0db;
+}
+
+.verdict.warnish {
+  background: rgba(255, 170, 0, 0.12);
+  border: 1px solid var(--amber);
+  color: #ffe2ad;
+}
+
+/* ── Visual authentication-path climb ─────────────────── */
+.tree-climb {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.climb-start,
+.climb-root {
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #0a1320;
+  border: 1px solid var(--line);
+}
+
+.climb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.climb-level {
+  flex: 0 0 28px;
+  color: var(--cyan);
+  font-size: 0.78rem;
+}
+
+.climb-pair {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.climb-node {
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.climb-node.cur {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: var(--cyan);
+  color: #b8f6ff;
+}
+
+.climb-node.sib {
+  background: rgba(255, 215, 0, 0.14);
+  border-color: var(--gold);
+  color: #ffe9a8;
+}
+
+.climb-arrow {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 @media (max-width: 1024px) {
   .grid {
     grid-template-columns: 1fr;
   }
 
-  #exhibit-5 {
+  #exhibit-5,
+  .span-2 {
     grid-column: auto;
   }
 

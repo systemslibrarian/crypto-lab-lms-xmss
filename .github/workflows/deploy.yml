@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Crypto correctness gates (RFC 8554 vectors + reuse-forgery)
+        run: npm test
+
       - name: Build
         run: npm run build
 

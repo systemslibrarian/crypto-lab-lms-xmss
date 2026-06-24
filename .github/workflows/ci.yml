@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [main] # main is covered by the deploy workflow's gates
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Crypto correctness gates (RFC 8554 vectors + reuse-forgery)
+        run: npm test
+
+      - name: Build
+        run: npm run build

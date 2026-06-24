@@ -1,9 +1,20 @@
 import './style.css';
-import { bytesToHex, textEncoder } from './bytes';
-import { LMS_PARAMS, lmsKeygen, lmsSign, lmsVerify, signaturesRemaining } from './lms';
+import { bytesToHex, concatBytes, textEncoder } from './bytes';
+import {
+  LMS_PARAMS,
+  computeAuthPath,
+  lmsKeygen,
+  lmsSign,
+  lmsVerify,
+  signaturesRemaining,
+} from './lms';
 import type { LMSPrivateKey, LMSPublicKey } from './lms';
+import { lmotsSign } from './lmots';
+import { forgeSignature, gatherKnowledge, stageReusedSignatures } from './forge';
 import { hssKeygen, hssSign, hssVerify } from './hss';
 import type { HSSPrivateKey, HSSPublicKey } from './hss';
+
+const FORGERY_DEMO_INDEX = 7;
 
 const APP = document.querySelector<HTMLDivElement>('#app');
 if (!APP) {
@@ -20,7 +31,6 @@ let lastLmsQ: number | null = null;
 
 let hssPrivateKey: HSSPrivateKey | null = null;
 let hssPublicKey: HSSPublicKey | null = null;
-let lastHssSignature: Uint8Array | null = null;
 
 function shortHex(data: Uint8Array, chars = 16): string {
   const hex = bytesToHex(data);
@@ -117,14 +127,55 @@ function setupLayout(): void {
           </div>
         </section>
 
+        <section class="panel span-2" id="exhibit-forgery" aria-labelledby="h2-forge">
+          <h2 id="h2-forge">Exhibit 3: Index Reuse &rarr; Live Forgery</h2>
+          <p class="muted">
+            The headline claim, proven. When a signer reuses one OTS index, an attacker who sees
+            <em>only the signatures</em> can forge a brand-new message that the genuine public key
+            accepts &mdash; no private key required. Generate an LMS keypair in Exhibit 1 first.
+          </p>
+          <div class="controls stacked">
+            <label for="forge-reuse">Times the signer reused index ${FORGERY_DEMO_INDEX} (more reuse &rarr; easier forgery)</label>
+            <input
+              id="forge-reuse"
+              type="range"
+              min="6"
+              max="32"
+              value="16"
+              aria-describedby="forge-reuse-val"
+            />
+            <span id="forge-reuse-val" class="mono">16 leaked signatures</span>
+            <label for="forge-target">Attacker's forged message (one the signer never approved)</label>
+            <input id="forge-target" value="install rootkit.bin &amp;&amp; exfiltrate keys" />
+            <button id="btn-forge" class="danger-btn">Mount the attack</button>
+            <span id="forge-progress" class="mono" role="status" aria-live="polite">Idle</span>
+          </div>
+          <ol id="forge-steps" class="steps" aria-live="polite"></ol>
+          <div id="forge-reach" class="reach" hidden>
+            <p class="reach-label">Average forgeable range per OTS position</p>
+            <div class="reach-row">
+              <span class="reach-name mono">1 signature</span>
+              <div class="reach-bar"><div class="reach-fill single" id="reach-single"></div></div>
+              <span class="reach-pct mono" id="reach-single-pct"></span>
+            </div>
+            <div class="reach-row">
+              <span class="reach-name mono">after reuse</span>
+              <div class="reach-bar"><div class="reach-fill many" id="reach-many"></div></div>
+              <span class="reach-pct mono" id="reach-many-pct"></span>
+            </div>
+          </div>
+          <div id="forge-verdict" class="verdict" role="status" aria-live="assertive"></div>
+          <div id="forge-sig" class="mono sig" aria-label="Forged signature bytes"></div>
+        </section>
+
         <section class="panel" id="exhibit-3" aria-labelledby="h2-ex3">
-          <h2 id="h2-ex3">Exhibit 3: Authentication Path Walk</h2>
-          <p class="muted">Each LMS signature carries 10 sibling hashes to rebuild the root.</p>
-          <ol id="auth-steps" class="steps" aria-live="polite"></ol>
+          <h2 id="h2-ex3">Exhibit 4: Authentication Path Walk</h2>
+          <p class="muted">Each LMS signature carries 10 sibling hashes that rebuild the root, level by level.</p>
+          <div id="auth-steps" class="tree-climb" aria-live="polite"></div>
         </section>
 
         <section class="panel" id="exhibit-4" aria-labelledby="h2-ex4">
-          <h2 id="h2-ex4">Exhibit 4: HSS Hierarchy</h2>
+          <h2 id="h2-ex4">Exhibit 5: HSS Hierarchy</h2>
           <p class="muted">Root H=5 signs leaf-tree public keys; each leaf tree signs up to 1024 messages.</p>
           <div class="controls stacked">
             <button id="btn-hss-keygen">Generate HSS Keypair</button>
@@ -138,7 +189,7 @@ function setupLayout(): void {
         </section>
 
         <section class="panel" id="exhibit-5" aria-labelledby="h2-ex5">
-          <h2 id="h2-ex5">Exhibit 5: When Stateful Signatures Win</h2>
+          <h2 id="h2-ex5">Exhibit 6: When Stateful Signatures Win</h2>
           <div class="decision mono">
             Need PQ signatures?
             Yes -> Need unlimited signatures?
@@ -212,29 +263,44 @@ function renderLeafGrid(): void {
 }
 
 function renderAuthPathDetails(): void {
-  const steps = document.querySelector<HTMLOListElement>('#auth-steps');
+  const steps = document.querySelector<HTMLDivElement>('#auth-steps');
   if (!steps) {
     return;
   }
 
   if (!lastLmsSignature || lastLmsQ === null) {
-    steps.innerHTML = '<li>Create a signature first to view path reconstruction steps.</li>';
+    steps.innerHTML = '<p class="muted">Sign a message in Exhibit 2 to watch its authentication path rebuild the root.</p>';
     return;
   }
 
   const auth: string[] = [];
   let offset = 4 + 1124 + 4;
   for (let i = 0; i < LMS_PARAMS.h; i += 1) {
-    const h = lastLmsSignature.slice(offset, offset + 32);
-    auth.push(bytesToHex(h));
+    auth.push(bytesToHex(lastLmsSignature.slice(offset, offset + 32)));
     offset += 32;
   }
 
-  const rows = [
-    `<li>q = ${lastLmsQ}, compute LM-OTS public key candidate from signature + message.</li>`,
-    ...auth.map((h, idx) => `<li>Level ${idx + 1}: combine node with sibling ${h.slice(0, 20)}...</li>`),
-    '<li>Final computed root is compared against LMS public key T[1].</li>',
+  const h = LMS_PARAMS.h;
+  let node = (1 << h) + lastLmsQ;
+  const rows: string[] = [
+    `<div class="climb-start mono">Start: leaf q=${lastLmsQ} &rarr; hash LM-OTS public key candidate into a leaf node.</div>`,
   ];
+
+  for (let level = 0; level < h; level += 1) {
+    const isRight = (node & 1) === 1;
+    const sib = `${auth[level].slice(0, 16)}&hellip;`;
+    const cur = '<span class="climb-node cur" aria-label="computed node">node</span>';
+    const sibBox = `<span class="climb-node sib" title="authentication path sibling">sib ${sib}</span>`;
+    const pair = isRight ? `${sibBox}${cur}` : `${cur}${sibBox}`;
+    rows.push(
+      `<div class="climb-row"><span class="climb-level mono">L${level + 1}</span><span class="climb-pair">${pair}</span><span class="climb-arrow" aria-hidden="true">&uarr; hash &rarr; parent</span></div>`,
+    );
+    node = Math.floor(node / 2);
+  }
+
+  rows.push(
+    '<div class="climb-root mono">Computed root <span class="climb-node cur">root</span> must equal public key <strong>T[1]</strong> &mdash; otherwise the signature is rejected.</div>',
+  );
   steps.innerHTML = rows.join('');
 }
 
@@ -392,6 +458,146 @@ function handleExportDanger(): void {
   box.value = JSON.stringify(exported, null, 2);
 }
 
+/** Mean fraction (0-100) of each OTS chain an attacker can reach given these depths. */
+function meanReachPercent(depths: number[]): number {
+  const maxDepth = 256;
+  const total = depths.reduce((sum, d) => sum + (maxDepth - d) / maxDepth, 0);
+  return (total / depths.length) * 100;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function appendForgeStep(text: string, tone: 'normal' | 'alarm' = 'normal'): void {
+  const steps = document.querySelector<HTMLOListElement>('#forge-steps');
+  if (!steps) return;
+  const li = document.createElement('li');
+  li.innerHTML = text;
+  if (tone === 'alarm') li.className = 'critical';
+  steps.appendChild(li);
+}
+
+async function handleForge(): Promise<void> {
+  const btn = document.querySelector<HTMLButtonElement>('#btn-forge');
+  const steps = document.querySelector<HTMLOListElement>('#forge-steps');
+  const progress = document.querySelector<HTMLSpanElement>('#forge-progress');
+  const verdict = document.querySelector<HTMLDivElement>('#forge-verdict');
+  const sigBox = document.querySelector<HTMLDivElement>('#forge-sig');
+  const reuseInput = document.querySelector<HTMLInputElement>('#forge-reuse');
+  const targetInput = document.querySelector<HTMLInputElement>('#forge-target');
+  const reach = document.querySelector<HTMLDivElement>('#forge-reach');
+  if (!steps || !verdict || !sigBox || !reuseInput || !targetInput) {
+    return;
+  }
+
+  steps.innerHTML = '';
+  verdict.textContent = '';
+  verdict.className = 'verdict';
+  sigBox.textContent = '';
+  if (reach) reach.hidden = true;
+
+  if (!lmsPrivateKey || !lmsPublicKey) {
+    verdict.textContent = 'Generate an LMS keypair in Exhibit 1 first.';
+    verdict.className = 'verdict warnish';
+    return;
+  }
+
+  const reuseCount = Number.parseInt(reuseInput.value, 10);
+  const targetMessage = textEncoder.encode(targetInput.value);
+
+  setButtonBusy(btn, true, 'Attacking...');
+  if (progress) progress.textContent = 'Staging the leak...';
+
+  try {
+    const I = lmsPrivateKey.I;
+    const q = FORGERY_DEMO_INDEX;
+    const authPath = concatBytes(...computeAuthPath(lmsPrivateKey.treeNodes, q, lmsPrivateKey.h));
+    const seed = lmsPrivateKey.seed;
+
+    // Stage 1 — the signer's mistake: many messages signed at one index.
+    const messages = Array.from({ length: reuseCount }, (_, i) =>
+      textEncoder.encode(`firmware build #${i} (signed honestly)`),
+    );
+    const leaked = await stageReusedSignatures(
+      {
+        I,
+        q,
+        lmsTypecode: lmsPrivateKey.typecode,
+        authPath,
+        signOts: (m) => lmotsSign(m, { I, q, seed }),
+      },
+      messages,
+    );
+    appendForgeStep(
+      `Signer reused index <strong>q=${q}</strong> for <strong>${reuseCount}</strong> different messages. The attacker now holds ${reuseCount} valid signatures.`,
+    );
+
+    // Stage 2 — distill what the leak exposes.
+    if (progress) progress.textContent = 'Analyzing leaked signatures...';
+    const knowledge = await gatherKnowledge(I, leaked);
+    const reachSingle = meanReachPercent(knowledge.perSignatureDepths[0]);
+    const reachMany = meanReachPercent(knowledge.minDepth);
+    if (reach) {
+      reach.hidden = false;
+      const singleFill = document.querySelector<HTMLDivElement>('#reach-single');
+      const manyFill = document.querySelector<HTMLDivElement>('#reach-many');
+      const singlePct = document.querySelector<HTMLSpanElement>('#reach-single-pct');
+      const manyPct = document.querySelector<HTMLSpanElement>('#reach-many-pct');
+      if (singleFill) singleFill.style.width = `${reachSingle.toFixed(1)}%`;
+      if (manyFill) manyFill.style.width = `${reachMany.toFixed(1)}%`;
+      if (singlePct) singlePct.textContent = `${reachSingle.toFixed(1)}%`;
+      if (manyPct) manyPct.textContent = `${reachMany.toFixed(1)}%`;
+    }
+    appendForgeStep(
+      `Reuse widened the attacker's reachable range from <strong>${reachSingle.toFixed(1)}%</strong> (one signature) to <strong>${reachMany.toFixed(1)}%</strong> per position.`,
+    );
+
+    // Stage 3 — grind a randomizer until the chosen message lands within reach.
+    if (progress) progress.textContent = 'Forging...';
+    const result = await forgeSignature(I, knowledge, targetMessage, lmsPrivateKey.typecode, {
+      onProgress: (attempts) => {
+        if (progress) progress.textContent = `Forging... ${attempts} attempts`;
+      },
+    });
+
+    if (!result) {
+      verdict.textContent = 'Forgery budget exhausted — increase the reuse count and try again.';
+      verdict.className = 'verdict warnish';
+      if (progress) progress.textContent = 'No forgery found';
+      return;
+    }
+    appendForgeStep(
+      `Forged "<strong>${escapeHtml(targetInput.value)}</strong>" in <strong>${result.attempts}</strong> randomizer attempt(s) &mdash; using only public data.`,
+    );
+
+    // Stage 4 — the genuine public key judges the forgery.
+    const accepted = await lmsVerify(targetMessage, result.signature, lmsPublicKey);
+    if (accepted) {
+      verdict.innerHTML =
+        '&#10003; FORGED SIGNATURE ACCEPTED by the genuine LMS public key. One reused index destroyed the scheme.';
+      verdict.className = 'verdict bad';
+      appendForgeStep('The real public key verified an attacker-chosen message. Trust is gone.', 'alarm');
+    } else {
+      verdict.textContent = 'Unexpected: forged signature did not verify.';
+      verdict.className = 'verdict warnish';
+    }
+    sigBox.textContent = `${result.signature.length} bytes\n${bytesToHex(result.signature).slice(0, 220)}...`;
+    if (progress) progress.textContent = 'Done';
+  } catch (err) {
+    verdict.textContent = err instanceof Error ? err.message : 'Unknown forgery error.';
+    verdict.className = 'verdict warnish';
+    if (progress) progress.textContent = 'Error - see console';
+    console.error(err);
+  } finally {
+    setButtonBusy(btn, false);
+  }
+}
+
 function renderHssState(): void {
   const state = document.querySelector<HTMLDivElement>('#hss-state');
   if (!state) {
@@ -461,7 +667,6 @@ async function handleHssSign(): Promise<void> {
     const msg = textEncoder.encode(input.value);
     const signature = await hssSign(msg, hssPrivateKey);
     const ok = await hssVerify(msg, signature, hssPublicKey);
-    lastHssSignature = signature;
 
     renderHssState();
     box.textContent = `${signature.length} bytes • verify=${ok ? 'valid' : 'invalid'}\n${bytesToHex(signature).slice(0, 220)}...`;
@@ -480,6 +685,9 @@ function bindEvents(): void {
   const btnUnsafeQ = document.querySelector<HTMLButtonElement>('#btn-q-override');
   const btnExport = document.querySelector<HTMLButtonElement>('#btn-export-state');
   const leafGrid = document.querySelector<HTMLDivElement>('#leaf-grid');
+  const btnForge = document.querySelector<HTMLButtonElement>('#btn-forge');
+  const forgeReuse = document.querySelector<HTMLInputElement>('#forge-reuse');
+  const forgeReuseVal = document.querySelector<HTMLSpanElement>('#forge-reuse-val');
   const btnHssKeygen = document.querySelector<HTMLButtonElement>('#btn-hss-keygen');
   const btnHssSign = document.querySelector<HTMLButtonElement>('#btn-hss-sign');
 
@@ -495,6 +703,12 @@ function bindEvents(): void {
   btnUnsafeQ?.addEventListener('click', handleUnsafeQOverride);
   btnExport?.addEventListener('click', handleExportDanger);
   leafGrid?.addEventListener('click', handleLeafClick);
+  btnForge?.addEventListener('click', () => {
+    void handleForge();
+  });
+  forgeReuse?.addEventListener('input', () => {
+    if (forgeReuseVal) forgeReuseVal.textContent = `${forgeReuse.value} leaked signatures`;
+  });
   btnHssKeygen?.addEventListener('click', () => {
     void handleHssKeygen();
   });
@@ -507,5 +721,3 @@ setupLayout();
 bindEvents();
 updateAllLmsViews();
 renderHssState();
-
-void lastHssSignature;

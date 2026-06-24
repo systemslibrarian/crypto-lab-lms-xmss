@@ -4,11 +4,23 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive browser demo of stateful hash-based signatures (LMS + HSS, RFC 8554 / NIST SP 800-208). Shows why reusing a one-time-signature index is catastrophic — with a live, working forgery."
+    />
+    <meta name="color-scheme" content="dark light" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LMS + HSS Vault — Stateful Hash-Based Signatures" />
+    <meta
+      property="og:description"
+      content="Generate an LMS Merkle key, sign firmware, and watch a real LM-OTS forgery succeed the moment an index is reused. RFC 8554 / NIST SP 800-208."
+    />
+    <meta name="twitter:card" content="summary" />
     <script>
       const saved = localStorage.getItem('theme');
       document.documentElement.setAttribute('data-theme', saved ?? 'dark');
     </script>
-    <title>crypto-lab-lms-xmss</title>
+    <title>LMS + HSS Vault — Stateful Hash-Based Signatures</title>
   </head>
   <body>
 <!-- BEGIN crypto-lab shared header — managed; edit shared-header.html + re-run reapply-header.py
