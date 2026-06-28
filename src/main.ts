@@ -206,6 +206,11 @@ function setupLayout(): void {
           <p class="muted">Cross-labs: crypto-lab-sphincs-ledger, crypto-lab-dilithium-seal, crypto-lab-falcon-seal, crypto-lab-hybrid-sign.</p>
         </section>
       </main>
+<footer style="margin-top:3rem;padding:2rem 1rem;border-top:1px solid rgba(128,128,128,.25);text-align:center;font-size:.85rem;line-height:1.9;opacity:.85;font-family:ui-monospace,Menlo,Consolas,monospace">
+  <div><strong>Related demos:</strong> <a href="https://systemslibrarian.github.io/crypto-lab-lms-ledger/" style="color:#35d6bb">lms-ledger</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-sphincs-ledger/" style="color:#35d6bb">sphincs-ledger</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-merkle-vault/" style="color:#35d6bb">merkle-vault</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-falcon-seal/" style="color:#35d6bb">falcon-seal</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-dilithium-seal/" style="color:#35d6bb">dilithium-seal</a></div>
+  <div style="margin-top:.5rem"><a href="https://github.com/systemslibrarian/crypto-lab-lms-xmss" style="color:#35d6bb">Source on GitHub</a> &middot; <a href="https://crypto-lab.systemslibrarian.dev/" style="color:#35d6bb">More crypto-lab demos</a></div>
+  <div style="margin-top:.75rem;opacity:.75">&ldquo;So whether you eat or drink or whatever you do, do it all for the glory of God.&rdquo; &mdash; 1 Corinthians 10:31</div>
+</footer>
     </div>
   `;
 }
