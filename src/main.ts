@@ -118,7 +118,7 @@ function setupLayout(): void {
             <button id="btn-q-override" class="warn">Set q Unsafely</button>
           </div>
           <div id="lms-sign-status" class="note" role="status" aria-live="polite"></div>
-          <div id="lms-signature" class="mono sig" aria-label="LMS signature bytes"></div>
+          <div id="lms-signature" class="mono sig" role="status" aria-live="polite" aria-label="LMS signature bytes"></div>
           <div class="danger">
             <h3>Danger Zone</h3>
             <p>Exporting and reusing private state can trigger catastrophic index reuse.</p>
@@ -165,7 +165,7 @@ function setupLayout(): void {
             </div>
           </div>
           <div id="forge-verdict" class="verdict" role="status" aria-live="assertive"></div>
-          <div id="forge-sig" class="mono sig" aria-label="Forged signature bytes"></div>
+          <div id="forge-sig" class="mono sig" role="status" aria-live="polite" aria-label="Forged signature bytes"></div>
         </section>
 
         <section class="panel" id="exhibit-3" aria-labelledby="h2-ex3">
