@@ -81,15 +81,21 @@ function setButtonBusy(btn: HTMLButtonElement | null, busy: boolean, label?: str
 function setupLayout(): void {
   const app = APP as HTMLDivElement;
   app.innerHTML = `
-    <a href="#main-content" class="skip-nav">Skip to main content</a>
     <div class="shell">
-      <header class="hero">
-        <p class="kicker">Crypto Lab • Stateful Hash-Based Signatures</p>
-        <h1>LMS + HSS Vault</h1>
-        <p class="lead">Every signature burns one slot forever. Reuse one index once and trust is gone.</p>
+      <main id="main-content">
+      <header class="cl-hero">
+        <div class="cl-hero-main">
+          <h1 class="cl-hero-title">LMS + HSS Vault</h1>
+          <p class="cl-hero-sub">Stateful Hash-Based Signatures · RFC 8554</p>
+          <p class="cl-hero-desc">Generate an LMS Merkle key, sign firmware, then reuse one LM-OTS index and watch a real forgery succeed against the genuine public key.</p>
+        </div>
+        <aside class="cl-hero-why" aria-label="Why it matters">
+          <span class="cl-hero-why-label">WHY IT MATTERS</span>
+          <p class="cl-hero-why-text">Each LM-OTS index is one-time-use: reuse it once and an attacker who sees only the signatures can forge new messages the real key accepts. These schemes guard firmware and boot chains, where a broken index is a compromised device.</p>
+        </aside>
       </header>
 
-      <main class="grid" id="main-content">
+      <div class="grid">
         <section class="panel" id="exhibit-1" aria-labelledby="h2-ex1">
           <h2 id="h2-ex1">Exhibit 1: Merkle Tree of OTS Keys</h2>
           <p class="muted">Generate LMS_SHA256_M32_H10 (1024 signatures) and inspect each leaf state.</p>
@@ -205,6 +211,7 @@ function setupLayout(): void {
           </ul>
           <p class="muted">Cross-labs: crypto-lab-sphincs-ledger, crypto-lab-dilithium-seal, crypto-lab-falcon-seal, crypto-lab-hybrid-sign.</p>
         </section>
+      </div>
       </main>
 <footer style="margin-top:3rem;padding:2rem 1rem;border-top:1px solid rgba(128,128,128,.25);text-align:center;font-size:.85rem;line-height:1.9;opacity:.85;font-family:ui-monospace,Menlo,Consolas,monospace">
   <div><strong>Related demos:</strong> <a href="https://systemslibrarian.github.io/crypto-lab-lms-ledger/" style="color:#35d6bb">lms-ledger</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-sphincs-ledger/" style="color:#35d6bb">sphincs-ledger</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-merkle-vault/" style="color:#35d6bb">merkle-vault</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-falcon-seal/" style="color:#35d6bb">falcon-seal</a> &middot; <a href="https://systemslibrarian.github.io/crypto-lab-dilithium-seal/" style="color:#35d6bb">dilithium-seal</a></div>
