@@ -1,5 +1,5 @@
 import './style.css';
-import { bytesToHex, concatBytes, textEncoder } from './bytes';
+import { bytesToHex, concatBytes, randomBytes, textEncoder } from './bytes';
 import {
   LMS_PARAMS,
   computeAuthPath,
@@ -9,7 +9,7 @@ import {
   signaturesRemaining,
 } from './lms';
 import type { LMSPrivateKey, LMSPublicKey } from './lms';
-import { lmotsSign } from './lmots';
+import { lmotsSign, lmotsCoefficients, LMOTS_PARAMS } from './lmots';
 import { forgeSignature, gatherKnowledge, stageReusedSignatures } from './forge';
 import { hssKeygen, hssSign, hssVerify } from './hss';
 import type { HSSPrivateKey, HSSPublicKey } from './hss';
@@ -95,10 +95,26 @@ function setupLayout(): void {
         </aside>
       </header>
 
+      <section class="framing" aria-label="How to read this demo">
+        <p class="framing-lead">
+          A <strong>one-time signature (OTS)</strong> is a key you may safely use <em>exactly once</em>.
+          This scheme packs 1024 of them into a Merkle tree so a single public key can sign 1024 times.
+          <strong>This demo shows what breaks when you use one twice.</strong>
+        </p>
+        <p class="framing-order">Read top to bottom: build the tree (1), spend a key (2), see the one-way chain each key is made of (3), then watch a single reused index get weaponized into a live forgery (4).</p>
+        <dl class="glossary" aria-label="Notation used in this demo">
+          <div><dt>I</dt><dd>this tree's random 16-byte ID (public)</dd></div>
+          <div><dt>q</dt><dd>which one-time key (leaf) a signature burns — the leaf index</dd></div>
+          <div><dt>T[1]</dt><dd>the Merkle root = the public key everyone verifies against</dd></div>
+          <div><dt>LM-OTS</dt><dd>the one-time signature at each leaf (Winternitz hash chains)</dd></div>
+          <div><dt>depth</dt><dd>how far down a hash chain a signer reveals for one position</dd></div>
+        </dl>
+      </section>
+
       <div class="grid">
         <section class="panel" id="exhibit-1" aria-labelledby="h2-ex1">
           <h2 id="h2-ex1">Exhibit 1: Merkle Tree of OTS Keys</h2>
-          <p class="muted">Generate LMS_SHA256_M32_H10 (1024 signatures) and inspect each leaf state.</p>
+          <p class="muted">Generate LMS_SHA256_M32_H10 (1024 signatures) and inspect each leaf state. <strong>Run this first</strong> — every later exhibit reuses this exact key.</p>
           <div class="controls">
             <button id="btn-lms-keygen">Generate LMS Keypair</button>
             <span id="lms-progress" class="mono" role="status" aria-live="polite" aria-label="LMS keygen progress">Idle</span>
@@ -119,7 +135,7 @@ function setupLayout(): void {
               <button id="btn-lms-sign">Sign Message</button>
               <button id="btn-lms-sign-again">Sign Again</button>
             </div>
-            <label for="q-override">Unsafe manual q override (demo corruption)</label>
+            <label for="q-override">Unsafe manual q (leaf index) override (demo corruption)</label>
             <input id="q-override" type="number" min="0" max="1023" value="0" aria-describedby="lms-sign-status" />
             <button id="btn-q-override" class="warn">Set q Unsafely</button>
           </div>
@@ -133,13 +149,48 @@ function setupLayout(): void {
           </div>
         </section>
 
-        <section class="panel span-2" id="exhibit-forgery" aria-labelledby="h2-forge">
-          <h2 id="h2-forge">Exhibit 3: Index Reuse &rarr; Live Forgery</h2>
+        <section class="panel span-2" id="exhibit-ots" aria-labelledby="h2-ots">
+          <h2 id="h2-ots">Exhibit 3: Inside One OTS &mdash; the Winternitz Chain</h2>
           <p class="muted">
-            The headline claim, proven. When a signer reuses one OTS index, an attacker who sees
-            <em>only the signatures</em> can forge a brand-new message that the genuine public key
-            accepts &mdash; no private key required. Generate an LMS keypair in Exhibit 1 first.
+            Every leaf is 34 one-way hash <strong>chains</strong>. To sign, the signer walks each chain
+            <em>down to a depth</em> chosen by the message; the revealed value is the signature.
+            Because you can only hash <em>forward</em> (never reverse), a verifier can finish the walk
+            to the top &mdash; but no attacker can climb back up. <strong>This is the whole basis of the
+            forgery below.</strong> Run Exhibit 1 first so the chains use the real key.
           </p>
+          <div class="ots-legend mono" aria-hidden="true">
+            <span class="ots-swatch known"></span> revealed to attacker
+            <span class="ots-swatch reach"></span> attacker can chain forward
+            <span class="ots-swatch locked"></span> one-way locked (needs the secret)
+          </div>
+          <div class="controls stacked">
+            <label for="ots-msg-a">Message A (the signer signs this)</label>
+            <input id="ots-msg-a" value="firmware v2.3.1" aria-describedby="ots-note" />
+            <label for="ots-msg-b">Message B (a different message, same leaf)</label>
+            <input id="ots-msg-b" value="install rootkit.bin" aria-describedby="ots-note" />
+            <button id="btn-ots-demo">Sign A, then try to reach B</button>
+          </div>
+          <div id="ots-note" class="note" role="status" aria-live="polite">Generate the LMS key in Exhibit 1, then run this to see real chain depths for these messages.</div>
+          <div id="ots-chains" class="ots-chains" role="group" aria-label="Winternitz chains for the first positions"></div>
+        </section>
+
+        <section class="panel" id="exhibit-auth" aria-labelledby="h2-ex3">
+          <h2 id="h2-ex3">Exhibit 4: Authentication Path Walk</h2>
+          <p class="muted">The leaf at <strong>q</strong> plus 10 sibling hashes rebuild the root <strong>T[1]</strong> &mdash; the same tree from Exhibit 1, climbed one level at a time.</p>
+          <div id="auth-tree" class="auth-tree" aria-hidden="true"></div>
+          <div id="auth-steps" class="tree-climb" aria-live="polite"></div>
+        </section>
+
+        <section class="panel span-2" id="exhibit-forgery" aria-labelledby="h2-forge">
+          <h2 id="h2-forge">Exhibit 5: Index Reuse &rarr; Live Forgery</h2>
+          <p class="muted">
+            The headline claim, proven. When a signer reuses one OTS index (the same <strong>q</strong>),
+            an attacker who sees <em>only the signatures</em> can forge a brand-new message that the
+            genuine public key accepts &mdash; no private key required. This weaponizes exactly the
+            one-way chain from Exhibit 3: each reuse can only <em>lower</em> a position's known depth,
+            and lower depths reach more messages.
+          </p>
+          <p id="forge-prereq" class="note amber" role="status">Prerequisite: run Exhibit 1 first to generate the key this attack targets.</p>
           <div class="controls stacked">
             <label for="forge-reuse">Times the signer reused index ${FORGERY_DEMO_INDEX} (more reuse &rarr; easier forgery)</label>
             <input
@@ -158,7 +209,7 @@ function setupLayout(): void {
           </div>
           <ol id="forge-steps" class="steps" aria-live="polite"></ol>
           <div id="forge-reach" class="reach" hidden>
-            <p class="reach-label">Average forgeable range per OTS position</p>
+            <p class="reach-label">How much of each hash chain the attacker can reach (averaged over all 34 positions)</p>
             <div class="reach-row">
               <span class="reach-name mono">1 signature</span>
               <div class="reach-bar"><div class="reach-fill single" id="reach-single"></div></div>
@@ -169,19 +220,15 @@ function setupLayout(): void {
               <div class="reach-bar"><div class="reach-fill many" id="reach-many"></div></div>
               <span class="reach-pct mono" id="reach-many-pct"></span>
             </div>
+            <p id="reach-plain" class="reach-plain"></p>
+            <div id="reach-chains" class="ots-chains compact" role="group" aria-label="Attacker reach per position after reuse"></div>
           </div>
           <div id="forge-verdict" class="verdict" role="status" aria-live="assertive"></div>
           <div id="forge-sig" class="mono sig" role="status" aria-live="polite" aria-label="Forged signature bytes"></div>
         </section>
 
-        <section class="panel" id="exhibit-3" aria-labelledby="h2-ex3">
-          <h2 id="h2-ex3">Exhibit 4: Authentication Path Walk</h2>
-          <p class="muted">Each LMS signature carries 10 sibling hashes that rebuild the root, level by level.</p>
-          <div id="auth-steps" class="tree-climb" aria-live="polite"></div>
-        </section>
-
         <section class="panel" id="exhibit-4" aria-labelledby="h2-ex4">
-          <h2 id="h2-ex4">Exhibit 5: HSS Hierarchy</h2>
+          <h2 id="h2-ex4">Exhibit 6: HSS Hierarchy</h2>
           <p class="muted">Root H=5 signs leaf-tree public keys; each leaf tree signs up to 1024 messages.</p>
           <div class="controls stacked">
             <button id="btn-hss-keygen">Generate HSS Keypair</button>
@@ -195,7 +242,7 @@ function setupLayout(): void {
         </section>
 
         <section class="panel" id="exhibit-5" aria-labelledby="h2-ex5">
-          <h2 id="h2-ex5">Exhibit 6: When Stateful Signatures Win</h2>
+          <h2 id="h2-ex5">Exhibit 7: When Stateful Signatures Win</h2>
           <div class="decision mono">
             Need PQ signatures?
             Yes -> Need unlimited signatures?
@@ -237,9 +284,9 @@ function renderLmsPublic(): void {
   const warningClass = rem === 0 ? 'critical' : rem < 103 ? 'amber' : 'ok';
 
   target.innerHTML = `
-    <p><strong>I</strong> ${shortHex(lmsPublicKey.I, 20)}</p>
-    <p><strong>T[1]</strong> ${shortHex(lmsPublicKey.T1, 24)}</p>
-    <p><strong>q</strong> ${lmsPrivateKey.q}</p>
+    <p><strong>I</strong> <span class="gloss">(tree's random ID)</span> ${shortHex(lmsPublicKey.I, 20)}</p>
+    <p><strong>T[1]</strong> <span class="gloss">(Merkle root = public key)</span> ${shortHex(lmsPublicKey.T1, 24)}</p>
+    <p><strong>q (leaf index)</strong> <span class="gloss">(next key to burn)</span> ${lmsPrivateKey.q}</p>
     <p class="${warningClass}"><strong>Signatures remaining</strong> ${rem} / ${LEAF_COUNT}</p>
     <p><strong>Used</strong> ${pctUsed.toFixed(2)}%</p>
   `;
@@ -274,11 +321,181 @@ function renderLeafGrid(): void {
   grid.innerHTML = fragments.join('');
 }
 
+/* ── Winternitz chain visualization (Exhibit 3 + reach) ──────────────
+ * Each LM-OTS position is a hash chain of length 2^w (256 steps, depths 0..255).
+ * To sign, the signer walks a position DOWN to the depth the message picks and
+ * reveals that value. Because hashing is one-way, whoever holds the depth-d value
+ * can advance ("chain forward") to any deeper depth >= d, but can never climb back
+ * to a shallower one. We draw each chain as SEGMENTS coarse cells so the shape is
+ * legible; the real 0..255 depth is always printed alongside. No math is faked —
+ * `depths` come straight from lmotsCoefficients(), the same function signing,
+ * verification, and the forgery all use. */
+const CHAIN_MAX = 1 << LMOTS_PARAMS.w; // 256 depths per position (0..255)
+const CHAIN_SEGMENTS = 20; // coarse cells drawn per chain; depth value shown exactly
+
+function depthToCell(depth: number): number {
+  return Math.min(CHAIN_SEGMENTS - 1, Math.round((depth / (CHAIN_MAX - 1)) * (CHAIN_SEGMENTS - 1)));
+}
+
+/**
+ * Build one chain row. `knownDepth` is where the attacker/signer holds a value.
+ * Cells shallower than that are one-way "locked"; the known cell is highlighted;
+ * cells deeper are "reach" (chainable forward). If `needDepth` is given, mark the
+ * depth a chosen message requires and whether it is reachable (>= knownDepth).
+ */
+function chainRowHtml(
+  posLabel: string,
+  knownDepth: number,
+  needDepth?: number,
+): string {
+  const knownCell = depthToCell(knownDepth);
+  const needCell = needDepth === undefined ? -1 : depthToCell(needDepth);
+  const cells: string[] = [];
+  for (let c = 0; c < CHAIN_SEGMENTS; c += 1) {
+    let cls = 'chain-cell ';
+    if (c < knownCell) cls += 'locked';
+    else if (c === knownCell) cls += 'known';
+    else cls += 'reach';
+    if (c === needCell) cls += ' need';
+    cells.push(`<span class="${cls}" aria-hidden="true"></span>`);
+  }
+  let tail = `<span class="chain-depth mono">d=${knownDepth}</span>`;
+  if (needDepth !== undefined) {
+    const reachable = needDepth >= knownDepth;
+    tail += reachable
+      ? `<span class="chain-verdict reachable mono">need d=${needDepth} &check; reachable</span>`
+      : `<span class="chain-verdict blocked mono">need d=${needDepth} &cross; SHALLOWER &mdash; locked</span>`;
+  }
+  return `<div class="chain-row"><span class="chain-pos mono">${posLabel}</span><span class="chain-track">${cells.join('')}</span>${tail}</div>`;
+}
+
+const OTS_DEMO_INDEX = 0; // a fresh, unused leaf — this demo only reads chain depths, never signs state
+
+async function handleOtsDemo(): Promise<void> {
+  const note = document.querySelector<HTMLDivElement>('#ots-note');
+  const chains = document.querySelector<HTMLDivElement>('#ots-chains');
+  const inputA = document.querySelector<HTMLInputElement>('#ots-msg-a');
+  const inputB = document.querySelector<HTMLInputElement>('#ots-msg-b');
+  const btn = document.querySelector<HTMLButtonElement>('#btn-ots-demo');
+  if (!note || !chains || !inputA || !inputB) return;
+
+  if (!lmsPrivateKey) {
+    note.textContent = 'Generate the LMS keypair in Exhibit 1 first — this reads the real key.';
+    note.className = 'note amber';
+    return;
+  }
+
+  setButtonBusy(btn, true, 'Signing...');
+  try {
+    const I = lmsPrivateKey.I;
+    const q = OTS_DEMO_INDEX;
+    // Real LM-OTS: fresh randomizer C per message, real depths from the shared coefficient function.
+    const Ca = randomBytes(LMOTS_PARAMS.n);
+    const Cb = randomBytes(LMOTS_PARAMS.n);
+    const depthsA = await lmotsCoefficients(I, q, Ca, textEncoder.encode(inputA.value));
+    const depthsB = await lmotsCoefficients(I, q, Cb, textEncoder.encode(inputB.value));
+
+    const shown = 8; // draw the first 8 of 34 positions; the rest behave identically
+    const rows: string[] = [];
+    let blocked = 0;
+    for (let i = 0; i < LMOTS_PARAMS.p; i += 1) {
+      if (depthsB[i] < depthsA[i]) blocked += 1;
+    }
+    for (let i = 0; i < shown; i += 1) {
+      rows.push(chainRowHtml(`pos ${i}`, depthsA[i], depthsB[i]));
+    }
+    chains.innerHTML =
+      `<p class="chain-caption mono">Signing A revealed each position at its own depth (green marker). Message B needs its own depths (blue marker): where B sits DEEPER, the attacker chains forward; where B is SHALLOWER, it is locked.</p>` +
+      rows.join('') +
+      `<p class="chain-caption mono">Showing positions 0&ndash;${shown - 1} of ${LMOTS_PARAMS.p}.</p>`;
+    note.innerHTML = `From <strong>one</strong> signature on A, message B is out of reach at <strong>${blocked} of ${LMOTS_PARAMS.p}</strong> positions (it needs a shallower depth there). A forger must reach <em>all</em> ${LMOTS_PARAMS.p}, so one signature is safe. Exhibit 5 shows how reuse erases that safety.`;
+    note.className = 'note';
+  } catch (err) {
+    note.textContent = err instanceof Error ? err.message : 'Chain demo failed.';
+    note.className = 'note critical';
+  } finally {
+    setButtonBusy(btn, false);
+  }
+}
+
+/**
+ * Draw a real 3-level slice of the Merkle tree around the signed leaf q: the leaf
+ * grid from Exhibit 1 and this root-check are the SAME structure, so learners see
+ * the connection. Node hashes are read from the genuine treeNodes — the lit path
+ * is the actual authentication path, and the slice's top node is a real ancestor
+ * of the root T[1]. */
+const AUTH_SLICE_LEVELS = 3; // show leaf level + 3 parent levels (8 leaves)
+
+function renderAuthTree(): void {
+  const el = document.querySelector<HTMLDivElement>('#auth-tree');
+  if (!el) return;
+  if (!lmsPrivateKey || lastLmsQ === null) {
+    el.innerHTML = '';
+    return;
+  }
+  const h = lmsPrivateKey.h;
+  const q = lastLmsQ;
+  const nodes = lmsPrivateKey.treeNodes;
+
+  // Path node numbers from the leaf up to the slice top.
+  const leafNode = (1 << h) + q;
+  const pathNodes: number[] = [];
+  let n = leafNode;
+  for (let l = 0; l <= AUTH_SLICE_LEVELS; l += 1) {
+    pathNodes.push(n);
+    n = Math.floor(n / 2);
+  }
+  const sliceTop = pathNodes[AUTH_SLICE_LEVELS];
+  const sliceTopFirstLeaf = sliceTop << AUTH_SLICE_LEVELS; // leftmost leaf under the slice top
+
+  const short = (node: number): string => {
+    const val = nodes[node];
+    return val ? bytesToHex(val).slice(0, 6) : '······';
+  };
+
+  const rows: string[] = [];
+  // Top (slice root) down to the leaf level so it reads like a tree.
+  for (let level = AUTH_SLICE_LEVELS; level >= 0; level -= 1) {
+    const count = 1 << (AUTH_SLICE_LEVELS - level);
+    const firstNode = sliceTopFirstLeaf >> level;
+    const onPath = pathNodes[level];
+    const sibling = onPath ^ 1;
+    const cells: string[] = [];
+    for (let k = 0; k < count; k += 1) {
+      const node = firstNode + k;
+      let cls = 'atn';
+      let role = '';
+      if (node === onPath) {
+        cls += level === 0 ? ' atn-leaf' : ' atn-path';
+        role = level === 0 ? 'signed leaf q=' + q : 'recomputed';
+      } else if (node === sibling) {
+        cls += ' atn-sib';
+        role = 'sibling from signature';
+      }
+      const label = role ? ` title="${role}"` : '';
+      cells.push(`<span class="${cls}"${label}>${short(node)}</span>`);
+    }
+    const levelName =
+      level === AUTH_SLICE_LEVELS
+        ? '&uarr; to T[1]'
+        : level === 0
+          ? 'leaves'
+          : `L${level}`;
+    rows.push(`<div class="atn-row"><span class="atn-lname mono">${levelName}</span><div class="atn-cells">${cells.join('')}</div></div>`);
+  }
+  el.innerHTML =
+    `<p class="atn-caption mono">A 3-level slice of the same tree (leaf grid from Exhibit 1). Green = the signed leaf q=${q}. Gold = the sibling the signature supplies at each level. Blue = the node the verifier recomputes, climbing to the real root T[1].</p>` +
+    rows.join('') +
+    `<p class="atn-caption mono">Above this slice, ${h - AUTH_SLICE_LEVELS} more levels finish the climb to T[1].</p>`;
+}
+
 function renderAuthPathDetails(): void {
   const steps = document.querySelector<HTMLDivElement>('#auth-steps');
   if (!steps) {
     return;
   }
+
+  renderAuthTree();
 
   if (!lastLmsSignature || lastLmsQ === null) {
     steps.innerHTML = '<p class="muted">Sign a message in Exhibit 2 to watch its authentication path rebuild the root.</p>';
@@ -316,10 +533,27 @@ function renderAuthPathDetails(): void {
   steps.innerHTML = rows.join('');
 }
 
+/** Gate exhibits that depend on Exhibit 1's key: disable and explain until keygen runs. */
+function updatePrerequisiteGates(): void {
+  const ready = !!lmsPrivateKey;
+  const forgeBtn = document.querySelector<HTMLButtonElement>('#btn-forge');
+  const otsBtn = document.querySelector<HTMLButtonElement>('#btn-ots-demo');
+  const prereq = document.querySelector<HTMLParagraphElement>('#forge-prereq');
+  if (forgeBtn) {
+    forgeBtn.disabled = !ready;
+    forgeBtn.title = ready ? '' : 'Run Exhibit 1 (Generate LMS Keypair) first';
+  }
+  if (otsBtn) otsBtn.disabled = !ready;
+  if (prereq) {
+    prereq.hidden = ready;
+  }
+}
+
 function updateAllLmsViews(): void {
   renderLmsPublic();
   renderLeafGrid();
   renderAuthPathDetails();
+  updatePrerequisiteGates();
 }
 
 async function handleLmsKeygen(): Promise<void> {
@@ -552,8 +786,16 @@ async function handleForge(): Promise<void> {
     // Stage 2 — distill what the leak exposes.
     if (progress) progress.textContent = 'Analyzing leaked signatures...';
     const knowledge = await gatherKnowledge(I, leaked);
-    const reachSingle = meanReachPercent(knowledge.perSignatureDepths[0]);
+    const singleDepths = knowledge.perSignatureDepths[0];
+    const reachSingle = meanReachPercent(singleDepths);
     const reachMany = meanReachPercent(knowledge.minDepth);
+    // Plain-language count: a position is "hittable" when the attacker's known depth
+    // is shallow enough that a typical message's required depth (median ~ half the
+    // chain) sits at or below it. Real, computed from the actual depth vectors.
+    const MEDIAN = Math.floor((CHAIN_MAX - 1) / 2);
+    const hittable = (depths: number[]): number => depths.filter((d) => d <= MEDIAN).length;
+    const hitSingle = hittable(singleDepths);
+    const hitMany = hittable(knowledge.minDepth);
     if (reach) {
       reach.hidden = false;
       const singleFill = document.querySelector<HTMLDivElement>('#reach-single');
@@ -564,9 +806,26 @@ async function handleForge(): Promise<void> {
       if (manyFill) manyFill.style.width = `${reachMany.toFixed(1)}%`;
       if (singlePct) singlePct.textContent = `${reachSingle.toFixed(1)}%`;
       if (manyPct) manyPct.textContent = `${reachMany.toFixed(1)}%`;
+      const plain = document.querySelector<HTMLParagraphElement>('#reach-plain');
+      if (plain) {
+        plain.innerHTML = `Positions a typical message can hit: <strong>${hitSingle} &rarr; ${hitMany} of ${LMOTS_PARAMS.p}</strong>. Each reuse only ever <em>lowers</em> a position's known depth (green marker slides left), never raises it &mdash; so the reachable segment can only grow.`;
+      }
+      // Chain sparkline: draw the first positions' known depth after reuse so the
+      // learner sees individual positions, not just an average.
+      const reachChains = document.querySelector<HTMLDivElement>('#reach-chains');
+      if (reachChains) {
+        const shown = 8;
+        const rows: string[] = [];
+        for (let i = 0; i < shown; i += 1) {
+          rows.push(chainRowHtml(`pos ${i}`, knowledge.minDepth[i]));
+        }
+        reachChains.innerHTML =
+          `<p class="chain-caption mono">Known depth per position after ${reuseCount} reuses (green marker = attacker's lowest revealed depth; everything to its right is reachable). Positions 0&ndash;${shown - 1} of ${LMOTS_PARAMS.p}.</p>` +
+          rows.join('');
+      }
     }
     appendForgeStep(
-      `Reuse widened the attacker's reachable range from <strong>${reachSingle.toFixed(1)}%</strong> (one signature) to <strong>${reachMany.toFixed(1)}%</strong> per position.`,
+      `Reuse widened the attacker's reachable range from <strong>${reachSingle.toFixed(1)}%</strong> (one signature) to <strong>${reachMany.toFixed(1)}%</strong> per position &mdash; positions a typical message can hit rose from <strong>${hitSingle}</strong> to <strong>${hitMany}</strong> of ${LMOTS_PARAMS.p}.`,
     );
 
     // Stage 3 — grind a randomizer until the chosen message lands within reach.
@@ -698,6 +957,7 @@ function bindEvents(): void {
   const btnExport = document.querySelector<HTMLButtonElement>('#btn-export-state');
   const leafGrid = document.querySelector<HTMLDivElement>('#leaf-grid');
   const btnForge = document.querySelector<HTMLButtonElement>('#btn-forge');
+  const btnOtsDemo = document.querySelector<HTMLButtonElement>('#btn-ots-demo');
   const forgeReuse = document.querySelector<HTMLInputElement>('#forge-reuse');
   const forgeReuseVal = document.querySelector<HTMLSpanElement>('#forge-reuse-val');
   const btnHssKeygen = document.querySelector<HTMLButtonElement>('#btn-hss-keygen');
@@ -717,6 +977,9 @@ function bindEvents(): void {
   leafGrid?.addEventListener('click', handleLeafClick);
   btnForge?.addEventListener('click', () => {
     void handleForge();
+  });
+  btnOtsDemo?.addEventListener('click', () => {
+    void handleOtsDemo();
   });
   forgeReuse?.addEventListener('input', () => {
     if (forgeReuseVal) forgeReuseVal.textContent = `${forgeReuse.value} leaked signatures`;

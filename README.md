@@ -12,7 +12,19 @@ This project demonstrates stateful hash-based signatures in the browser:
 
 All hashing uses Web Crypto `subtle.digest('SHA-256', ...)`.
 
-The UI is built as six exhibits focused on the key operational fact most demos skip: LMS is stateful, and index reuse is catastrophic. Exhibit 3 doesn't just assert this — it mounts a **live, working forgery**: reuse one one-time-signature index a handful of times and an attacker, using only the leaked signatures, forges a brand-new message that the genuine public key accepts.
+The UI is built as seven exhibits focused on the key operational fact most demos skip: LMS is stateful, and index reuse is catastrophic. Exhibit 5 doesn't just assert this — it mounts a **live, working forgery**: reuse one one-time-signature index a handful of times and an attacker, using only the leaked signatures, forges a brand-new message that the genuine public key accepts.
+
+The exhibits build the picture bottom-up so the forgery lands as understanding, not spectacle:
+
+1. **Merkle Tree of OTS Keys** — generate `LMS_SHA256_M32_H10` (1024 leaves) and inspect each leaf's state.
+2. **Signing Consumes State** — sign a message, watch `q` (the leaf index) advance and localStorage enforce single use.
+3. **Inside One OTS — the Winternitz Chain** — draw the one-way hash chains a leaf is made of; sign message A, then see that a different message B needs a *shallower* depth an attacker can't reach from one signature. This is the prerequisite the forgery weaponizes.
+4. **Authentication Path Walk** — a real slice of the same Merkle tree, climbing sibling-by-sibling from the signed leaf up to the root `T[1]`.
+5. **Index Reuse → Live Forgery** — dial how many times the signer reused one index and watch the attacker's per-position reachable depth drop until a chosen malicious message is forgeable and the genuine public key accepts it.
+6. **HSS Hierarchy** — a two-level tree signing 32,768 messages total.
+7. **When Stateful Signatures Win** — where LMS/XMSS is the right tool and where it is not.
+
+Every symbol (`I`, `q`, `T[1]`, LM-OTS, depth) is glossed inline at the top of the page so a newcomer to RFC 8554 notation can follow along, while the real per-position depth vectors and honest reach caveats keep it worthwhile for a professional.
 
 ## When to Use It
 
@@ -28,7 +40,7 @@ Use this demo when you need to:
 
 **[systemslibrarian.github.io/crypto-lab-lms-xmss](https://systemslibrarian.github.io/crypto-lab-lms-xmss/)**
 
-Walk the six exhibits: generate LM-OTS and LMS keys, sign messages and step through Merkle-authentication-path verification, build the two-level HSS hierarchy, and — in Exhibit 3 — deliberately reuse an index to watch a working forgery be constructed from the leaked signatures and accepted by the genuine public key.
+Walk the seven exhibits: generate LM-OTS and LMS keys, see the one-way Winternitz chains inside a single leaf, step through Merkle-authentication-path verification, build the two-level HSS hierarchy, and — in Exhibit 5 — deliberately reuse an index to watch a working forgery be constructed from the leaked signatures and accepted by the genuine public key.
 
 ## What Can Go Wrong
 

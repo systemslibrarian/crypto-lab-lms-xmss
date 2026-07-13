@@ -78,6 +78,63 @@ body {
 @media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
 /* END cl-hero standard */
 
+/* ── Framing card + glossary ──────────────────────────── */
+.framing {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.framing-lead {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.framing-order {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.glossary {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 16px;
+}
+
+.glossary > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.glossary dt {
+  flex: 0 0 auto;
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-weight: 700;
+  color: var(--cyan);
+  font-size: 0.9rem;
+}
+
+.glossary dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.gloss {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -466,6 +523,191 @@ input[type='range'] {
 .climb-arrow {
   color: var(--muted);
   font-size: 0.74rem;
+}
+
+/* ── Winternitz chain diagram (Exhibit 3 + reach) ─────── */
+.ots-legend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.ots-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  vertical-align: -1px;
+  margin-right: 2px;
+}
+
+.ots-swatch.known {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.ots-swatch.reach {
+  background: rgba(0, 212, 255, 0.3);
+  border-color: var(--cyan);
+}
+
+.ots-swatch.locked {
+  background: rgba(139, 142, 150, 0.35);
+}
+
+.ots-chains {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chain-caption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 2px 0;
+}
+
+.chain-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chain-pos {
+  flex: 0 0 46px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chain-track {
+  display: inline-flex;
+  gap: 2px;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.chain-cell {
+  flex: 1 1 0;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+}
+
+.chain-cell.locked {
+  background: rgba(139, 142, 150, 0.32);
+}
+
+.chain-cell.reach {
+  background: rgba(0, 212, 255, 0.28);
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+.chain-cell.known {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.chain-cell.need {
+  outline: 2px solid var(--purple);
+  outline-offset: 1px;
+}
+
+.chain-depth {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--ink);
+}
+
+.chain-verdict {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+}
+
+.chain-verdict.reachable {
+  color: var(--green);
+}
+
+.chain-verdict.blocked {
+  color: var(--amber);
+}
+
+.reach-plain {
+  margin: 10px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* ── Merkle tree slice (Exhibit 4) ────────────────────── */
+.auth-tree {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.atn-caption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 2px 0;
+}
+
+.atn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.atn-lname {
+  flex: 0 0 62px;
+  font-size: 0.72rem;
+  color: var(--cyan);
+}
+
+.atn-cells {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex: 1;
+}
+
+.atn {
+  font-family: 'IBM Plex Mono', 'Consolas', monospace;
+  font-size: 0.68rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #0a1320;
+  color: var(--muted);
+  min-width: 46px;
+  text-align: center;
+}
+
+.atn-leaf {
+  background: rgba(0, 255, 136, 0.16);
+  border-color: var(--green);
+  color: #b6ffd9;
+}
+
+.atn-path {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: var(--cyan);
+  color: #b8f6ff;
+}
+
+.atn-sib {
+  background: rgba(255, 215, 0, 0.16);
+  border-color: var(--gold);
+  color: #ffe9a8;
 }
 
 @media (max-width: 1024px) {
