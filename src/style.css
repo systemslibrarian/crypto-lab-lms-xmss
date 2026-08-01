@@ -36,6 +36,16 @@
   --red: #ff3366;
   --amber: #ffaa00;
   --line: #1f3650;
+  /* Control boundaries only (input, textarea). Those controls are filled with
+     #0b1725 — within 1.07:1 of the page background and the panels behind them —
+     so the border is the only thing that makes the control visible, and WCAG 2.1
+     SC 1.4.11 requires 3:1. The old literal #274868 measured 2.03:1 at best (on
+     --bg) / 1.40:1 at worst (on the #19314a gradient stop); --line-strong is
+     4.73:1 on --bg, 4.18:1 on --panel, 3.80:1 on --panel-2, and 3.27:1 on the
+     worst gradient stop. --line stays as-is for decorative rules (card outlines,
+     dividers, table rules, hero blocks). This lab has a single dark palette, so
+     there is only one theme block to fix. */
+  --line-strong: #6a8097;
 
   font-family: 'Space Grotesk', 'Avenir Next', 'Futura', 'Segoe UI', sans-serif;
   color: var(--ink);
@@ -198,7 +208,7 @@ button {
 input,
 textarea {
   background: #0b1725;
-  border: 1px solid #274868;
+  border: 1px solid var(--line-strong);
   color: var(--ink);
   border-radius: 8px;
   padding: 8px 10px;
