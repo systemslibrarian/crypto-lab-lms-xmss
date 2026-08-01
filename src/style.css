@@ -64,7 +64,6 @@ body {
   padding: 24px 0 40px;
 }
 
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 /* Theme mapping (this demo has a single dark palette; no --text-dim/--accent/--border):
    --text-dim -> --muted, --accent -> --cyan, --border -> --line, text -> --ink */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
@@ -75,8 +74,7 @@ body {
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--line);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--cyan) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--muted);}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;color:var(--ink);}
-@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
-/* END cl-hero standard */
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-main{flex-basis:auto;min-width:0;}.cl-hero-why{flex-basis:auto;width:100%;}}
 
 /* ── Framing card + glossary ──────────────────────────── */
 .framing {
@@ -751,5 +749,18 @@ input[type='range'] {
 
   textarea {
     min-height: 80px;
+  }
+}
+
+/* WCAG 2.3.3 / 2.2.2 — respect a reduced-motion preference. The .leaf.current
+   pulse loops indefinitely, so it is stopped rather than merely shortened. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
