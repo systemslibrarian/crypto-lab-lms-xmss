@@ -1,7 +1,12 @@
 import { bytesEqual, concatBytes, textEncoder } from '../bytes';
 import { computeAuthPath, lmsKeygen, lmsSign, lmsVerify } from '../lms';
 import { lmotsSign } from '../lmots';
-import { forgeSignature, gatherKnowledge, stageReusedSignatures } from '../forge';
+import {
+  countPositionsReachableAtDepth,
+  forgeSignature,
+  gatherKnowledge,
+  stageReusedSignatures,
+} from '../forge';
 import type { LeakedSignature } from '../forge';
 
 function assert(condition: boolean, message: string): void {
@@ -17,6 +22,9 @@ function logPass(message: string): void {
 const REUSE_COUNT = 16;
 
 async function run(): Promise<void> {
+  assert(countPositionsReachableAtDepth([0, 127, 128, 255], 127) === 2, 'midpoint reach count mismatch');
+  logPass('Midpoint reach statistic counts measured depths at or before the threshold');
+
   // Small tree keeps keygen fast; the index-reuse forgery lives entirely in the
   // LM-OTS layer and is independent of the Merkle tree height.
   const { privateKey, publicKey } = await lmsKeygen(undefined, { h: 5 });

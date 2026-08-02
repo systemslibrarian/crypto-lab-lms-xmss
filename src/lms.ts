@@ -122,8 +122,8 @@ export async function lmsSign(
   remainingSignatures: number;
 }> {
   const q = privateKey.q;
-  if (q >= privateKey.maxQ) {
-    throw new Error('LMS key exhausted');
+  if (!Number.isInteger(q) || q < 0 || q >= privateKey.maxQ) {
+    throw new Error(`Invalid or exhausted LMS leaf index q=${String(q)}`);
   }
   if (privateKey.usedIndexes.has(q)) {
     throw new Error(`LMS index reuse detected for q=${q}`);

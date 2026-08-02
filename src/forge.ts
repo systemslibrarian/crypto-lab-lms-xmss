@@ -75,6 +75,11 @@ export interface ForgeKnowledge {
   perSignatureDepths: number[][];
 }
 
+/** Count positions whose lowest revealed depth can reach a chosen comparison depth. */
+export function countPositionsReachableAtDepth(depths: number[], comparisonDepth: number): number {
+  return depths.filter((depth) => depth <= comparisonDepth).length;
+}
+
 /**
  * Distill the leaked signatures into the deepest knowledge the attacker can hold:
  * for every Winternitz position, the lowest chain depth (and the value at it) seen

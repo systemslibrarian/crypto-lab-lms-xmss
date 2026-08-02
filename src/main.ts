@@ -10,11 +10,16 @@ import {
 } from './lms';
 import type { LMSPrivateKey, LMSPublicKey } from './lms';
 import { lmotsSign, lmotsCoefficients, LMOTS_PARAMS } from './lmots';
-import { forgeSignature, gatherKnowledge, stageReusedSignatures } from './forge';
+import {
+  countPositionsReachableAtDepth,
+  forgeSignature,
+  gatherKnowledge,
+  stageReusedSignatures,
+} from './forge';
+import { parseLeafIndex } from './input';
 import { hssKeygen, hssSign, hssVerify } from './hss';
 import type { HSSPrivateKey, HSSPublicKey } from './hss';
 
-const FORGERY_DEMO_INDEX = 7;
 
 const APP = document.querySelector<HTMLDivElement>('#app');
 if (!APP) {
@@ -143,7 +148,7 @@ function setupLayout(): void {
           <div id="lms-signature" class="mono sig" role="status" aria-live="polite" aria-label="LMS signature bytes"></div>
           <div class="danger">
             <h3>Danger Zone</h3>
-            <p>Exporting and reusing private state can trigger catastrophic index reuse.</p>
+            <p>Exported state can be cloned or rolled back. Exhibit 5 makes that failure concrete: it burns the live signer&rsquo;s next leaf, then stages stale copies that reuse that same leaf.</p>
             <button id="btn-export-state" class="danger-btn">Export Secret State (Unsafe)</button>
             <textarea id="export-box" readonly placeholder="Unsafe export appears here" aria-label="Exported private state — unsafe"></textarea>
           </div>
@@ -192,7 +197,7 @@ function setupLayout(): void {
           </p>
           <p id="forge-prereq" class="note amber" role="status">Prerequisite: run Exhibit 1 first to generate the key this attack targets.</p>
           <div class="controls stacked">
-            <label for="forge-reuse">Times the signer reused index ${FORGERY_DEMO_INDEX} (more reuse &rarr; easier forgery)</label>
+            <label for="forge-reuse">Signatures emitted from one burned index after rollback (more copies &rarr; easier forgery)</label>
             <input
               id="forge-reuse"
               type="range"
@@ -673,7 +678,15 @@ function handleUnsafeQOverride(): void {
   if (!input || !status || !lmsPrivateKey) {
     return;
   }
-  lmsPrivateKey.q = Number.parseInt(input.value, 10);
+  const q = parseLeafIndex(input.value, lmsPrivateKey.maxQ);
+  if (q === null) {
+    input.setAttribute('aria-invalid', 'true');
+    status.textContent = `ERROR: q must be a whole leaf index from 0 to ${lmsPrivateKey.maxQ - 1}. State was not changed.`;
+    status.className = 'note critical';
+    return;
+  }
+  input.removeAttribute('aria-invalid');
+  lmsPrivateKey.q = q;
   updateAllLmsViews();
   status.textContent = `q manually set to ${lmsPrivateKey.q}. This simulates state corruption risk.`;
   status.className = 'note amber';
@@ -761,9 +774,19 @@ async function handleForge(): Promise<void> {
 
   try {
     const I = lmsPrivateKey.I;
-    const q = FORGERY_DEMO_INDEX;
+    if (signaturesRemaining(lmsPrivateKey) === 0) {
+      throw new Error('The LMS key is exhausted; generate a new key before staging rollback.');
+    }
+    const q = lmsPrivateKey.q;
     const authPath = concatBytes(...computeAuthPath(lmsPrivateKey.treeNodes, q, lmsPrivateKey.h));
     const seed = lmsPrivateKey.seed;
+
+    // Burn the actual live next index before modeling stale exported copies.
+    // This ties the staged incident to the meter and leaf grid.
+    lmsPrivateKey.usedIndexes.add(q);
+    lmsPrivateKey.q += 1;
+    persistUsedIndexes();
+    updateAllLmsViews();
 
     // Stage 1 — the signer's mistake: many messages signed at one index.
     const messages = Array.from({ length: reuseCount }, (_, i) =>
@@ -780,7 +803,7 @@ async function handleForge(): Promise<void> {
       messages,
     );
     appendForgeStep(
-      `Signer reused index <strong>q=${q}</strong> for <strong>${reuseCount}</strong> different messages. The attacker now holds ${reuseCount} valid signatures.`,
+      `The live signer burned <strong>q=${q}</strong>; restored copies then emitted <strong>${reuseCount}</strong> signatures from that same index. Leaf ${q} is now marked used in Exhibit 1.`,
     );
 
     // Stage 2 — distill what the leak exposes.
@@ -789,13 +812,11 @@ async function handleForge(): Promise<void> {
     const singleDepths = knowledge.perSignatureDepths[0];
     const reachSingle = meanReachPercent(singleDepths);
     const reachMany = meanReachPercent(knowledge.minDepth);
-    // Plain-language count: a position is "hittable" when the attacker's known depth
-    // is shallow enough that a typical message's required depth (median ~ half the
-    // chain) sits at or below it. Real, computed from the actual depth vectors.
+    // Exact threshold statistic over the measured depth vectors. This does not
+    // claim how many positions a sampled message actually reaches.
     const MEDIAN = Math.floor((CHAIN_MAX - 1) / 2);
-    const hittable = (depths: number[]): number => depths.filter((d) => d <= MEDIAN).length;
-    const hitSingle = hittable(singleDepths);
-    const hitMany = hittable(knowledge.minDepth);
+    const hitSingle = countPositionsReachableAtDepth(singleDepths, MEDIAN);
+    const hitMany = countPositionsReachableAtDepth(knowledge.minDepth, MEDIAN);
     if (reach) {
       reach.hidden = false;
       const singleFill = document.querySelector<HTMLDivElement>('#reach-single');
@@ -808,7 +829,7 @@ async function handleForge(): Promise<void> {
       if (manyPct) manyPct.textContent = `${reachMany.toFixed(1)}%`;
       const plain = document.querySelector<HTMLParagraphElement>('#reach-plain');
       if (plain) {
-        plain.innerHTML = `Positions a typical message can hit: <strong>${hitSingle} &rarr; ${hitMany} of ${LMOTS_PARAMS.p}</strong>. Each reuse only ever <em>lowers</em> a position's known depth (green marker slides left), never raises it &mdash; so the reachable segment can only grow.`;
+        plain.innerHTML = `Positions whose known value is at or before midpoint depth ${MEDIAN}: <strong>${hitSingle} &rarr; ${hitMany} of ${LMOTS_PARAMS.p}</strong>. This is a threshold summary of the measured chain depths, not a sampled message. Each reuse only ever <em>lowers</em> a position's known depth (green marker slides left), never raises it &mdash; so the reachable segment can only grow.`;
       }
       // Chain sparkline: draw the first positions' known depth after reuse so the
       // learner sees individual positions, not just an average.
@@ -825,7 +846,7 @@ async function handleForge(): Promise<void> {
       }
     }
     appendForgeStep(
-      `Reuse widened the attacker's reachable range from <strong>${reachSingle.toFixed(1)}%</strong> (one signature) to <strong>${reachMany.toFixed(1)}%</strong> per position &mdash; positions a typical message can hit rose from <strong>${hitSingle}</strong> to <strong>${hitMany}</strong> of ${LMOTS_PARAMS.p}.`,
+      `Reuse widened the attacker's reachable range from <strong>${reachSingle.toFixed(1)}%</strong> (one signature) to <strong>${reachMany.toFixed(1)}%</strong> per position. At midpoint depth ${MEDIAN}, the number of positions already reachable rose from <strong>${hitSingle}</strong> to <strong>${hitMany}</strong> of ${LMOTS_PARAMS.p}.`,
     );
 
     // Stage 3 — grind a randomizer until the chosen message lands within reach.

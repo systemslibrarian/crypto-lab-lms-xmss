@@ -1,6 +1,7 @@
 import { textEncoder } from '../bytes';
 import { lmsKeygen, lmsSign, lmsVerify } from '../lms';
 import type { LMSPrivateKey } from '../lms';
+import { parseLeafIndex } from '../input';
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -23,6 +24,13 @@ function clonePrivateKey(key: LMSPrivateKey): LMSPrivateKey {
 }
 
 async function run(): Promise<void> {
+  assert(parseLeafIndex('', 1024) === null, 'Empty q override must be rejected');
+  assert(parseLeafIndex('-5', 1024) === null, 'Negative q override must be rejected');
+  assert(parseLeafIndex('12.5', 1024) === null, 'Fractional q override must be rejected');
+  assert(parseLeafIndex('1024', 1024) === null, 'Out-of-range q override must be rejected');
+  assert(parseLeafIndex('7', 1024) === 7, 'Valid q override must parse');
+  logPass('Unsafe q override parser accepts only in-range whole leaf indexes');
+
   const start = Date.now();
   const { privateKey, publicKey } = await lmsKeygen(undefined, { h: 5 });
   const elapsedMs = Date.now() - start;
@@ -51,6 +59,19 @@ async function run(): Promise<void> {
   }
   assert(reuseBlocked, 'Index reuse attempt did not throw');
   logPass('Attempted index reuse throws');
+
+  for (const invalidQ of [-5, Number.NaN, 1.5, corruptedState.maxQ]) {
+    const invalidState = clonePrivateKey(privateKey);
+    invalidState.q = invalidQ;
+    let invalidBlocked = false;
+    try {
+      await lmsSign(message, invalidState);
+    } catch {
+      invalidBlocked = true;
+    }
+    assert(invalidBlocked, `Invalid q=${String(invalidQ)} reached signing`);
+  }
+  logPass('LMS signer rejects negative, NaN, fractional, and exhausted indexes');
 
   const tampered = new Uint8Array(first.signature);
   tampered[tampered.length - 1] ^= 0x01;
