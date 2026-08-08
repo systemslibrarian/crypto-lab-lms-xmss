@@ -523,7 +523,12 @@ function renderAuthPathDetails(): void {
   for (let level = 0; level < h; level += 1) {
     const isRight = (node & 1) === 1;
     const sib = `${auth[level].slice(0, 16)}&hellip;`;
-    const cur = '<span class="climb-node cur" aria-label="computed node">node</span>';
+    // `title`, not `aria-label`: this span has no role, and an accessible name
+    // on a generic role is discarded by browsers — axe files it under
+    // `aria-prohibited-attr`, so it reached no assistive tech at all. `title`
+    // still delivers the tooltip, and it is exactly what the sibling box beside
+    // it already uses.
+    const cur = '<span class="climb-node cur" title="computed node">node</span>';
     const sibBox = `<span class="climb-node sib" title="authentication path sibling">sib ${sib}</span>`;
     const pair = isRight ? `${sibBox}${cur}` : `${cur}${sibBox}`;
     rows.push(

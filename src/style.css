@@ -290,8 +290,16 @@ button.warn {
   border-radius: 10px;
 }
 
+/* min-width: 0 as well as min-height, and it is not cosmetic. The base `button`
+   rule sets min-width: 44px; a leaf sits in one of 32 grid tracks about 15px
+   wide, so each leaf overflowed its track by ~29px and painted over the next
+   two. Grid items in a row overlap rather than push each other along, so the
+   leaf under the pointer was never the leaf that received the click — leaf 0's
+   click landed on leaf 1. It also pushed #leaf-grid's scrollWidth past its
+   client width for no reason. */
 .leaf {
   min-height: 18px;
+  min-width: 0;
   padding: 0;
   font-size: 0.55rem;
   border-radius: 2px;
@@ -303,9 +311,14 @@ button.warn {
   color: #b8f6ff;
 }
 
+/* A used leaf is still an operable control — it is not `disabled`, and clicking
+   it reports that leaf's status — so 1.4.3's inactive-component exemption does
+   not apply to it. #8893a0 measured 3.92:1 against this tile's own composited
+   grey; #99a4b0 measures 4.82:1 and still reads as spent beside a fresh leaf,
+   with the line-through carrying the state on its own. */
 .leaf.used {
   background: rgba(139, 142, 150, 0.28);
-  color: #8893a0;
+  color: #99a4b0;
   text-decoration: line-through;
 }
 
@@ -392,7 +405,15 @@ input[type='range'] {
   width: 100%;
 }
 
-.reach {
+/* Scoped to the element it was written for. As a bare `.reach` class selector
+   this also matched `span.chain-cell.reach` and `span.ots-swatch.reach`, which
+   are unrelated states that happen to share the word. The `padding: 10px 12px`
+   leaked onto every reachable Winternitz cell: padding is not shrinkable, so
+   each got an unshrinkable 26px floor against a locked cell's 2px. That
+   overflowed the row and pushed the document to 628px in a 380px viewport — and
+   at every width it made the chain diagram misreport its own proportions, which
+   is the one thing that diagram exists to show. */
+#forge-reach {
   margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -681,11 +702,18 @@ input[type='range'] {
   color: var(--cyan);
 }
 
+/* wrap + min-width: 0. `flex: 1` resolves to `flex-basis: 0` but leaves
+   `min-width: auto`, whose minimum is the sum of the children's own minimums —
+   and .atn below sets `min-width: 46px`, so the widest tree level (8 nodes)
+   floored this row at 468px and pushed the document sideways at 380px. Wrapping
+   costs nothing at desktop width, where the row has room and never wraps. */
 .atn-cells {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
   flex: 1;
+  min-width: 0;
 }
 
 .atn {
@@ -719,8 +747,13 @@ input[type='range'] {
 }
 
 @media (max-width: 1024px) {
+  /* minmax(0, 1fr), not a bare 1fr: the base rule above already gets this right,
+     and dropping the floor here reintroduced the auto-minimum at exactly the
+     widths where it matters — a bare fr track keeps a min-content minimum, so
+     the widest panel sized the single column and the document scrolled to 584px
+     in a 380px viewport. */
   .grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   #exhibit-5,
