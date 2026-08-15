@@ -24,7 +24,6 @@ export const NONTEXT_BASELINE: Record<
   "control-boundary|button#btn-lms-sign": { ratio: 2.16, required: 3.0, unverified: false },
   "control-boundary|button#btn-lms-sign-again": { ratio: 2.15, required: 3.0, unverified: false },
   "control-boundary|button#btn-ots-demo": { ratio: 2.05, required: 3.0, unverified: false },
-  "control-boundary|button#cl-theme-toggle.cl-btn.cl-icon": { ratio: 2.45, required: 3.0, unverified: false },
   "control-boundary|button.leaf.fresh": { ratio: 1.74, required: 3.0, unverified: false },
   "control-boundary|button.leaf.used": { ratio: 1.52, required: 3.0, unverified: false }
 };
