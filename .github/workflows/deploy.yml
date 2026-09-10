@@ -128,6 +128,7 @@ jobs:
           # and the site would keep serving the previous build. Ask for it explicitly;
           # a workflow_dispatch through the API is not suppressed. The dispatched run
           # is the same gate-then-deploy pipeline, so a bad merge still ships nothing.
+          #
           # The dispatched filename is this file, deploy.yml -- now the only workflow
           # this repo has.
           gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main \
