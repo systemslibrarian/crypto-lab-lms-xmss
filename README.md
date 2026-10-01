@@ -88,7 +88,7 @@ Winternitz hash chains are one-way: a chain value at depth `d` can be advanced t
 
 ## Tests
 
-The crypto is validated against RFC 8554 test vectors and the reuse-forgery is proven end-to-end. CI (`.github/workflows/ci.yml`) runs the type-check and the full gate suite on every push and pull request, and the GitHub Pages deploy is gated on the same checks.
+The crypto is validated against RFC 8554 test vectors and the reuse-forgery is proven end-to-end. CI (`.github/workflows/deploy.yml`) runs the type-check and the full gate suite on every push and pull request, and the GitHub Pages deploy is gated on the same checks.
 
 ```bash
 npm test          # type-check is separate; this runs all four gates
