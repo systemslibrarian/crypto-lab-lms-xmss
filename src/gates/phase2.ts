@@ -1,7 +1,12 @@
-import { textEncoder } from '../bytes';
+import { concatBytes, hexToBytes, textEncoder, u32 } from '../bytes';
 import { lmsKeygen, lmsSign, lmsVerify } from '../lms';
-import type { LMSPrivateKey } from '../lms';
+import type { LMSPrivateKey, LMSPublicKey } from '../lms';
 import { parseLeafIndex } from '../input';
+import {
+  TC1_MESSAGE_HEX,
+  TC1_PUBLIC_KEY_HEX,
+  TC1_SIGNATURE_HEX,
+} from './rfc8554-test-case-1';
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -78,7 +83,85 @@ async function run(): Promise<void> {
   const tamperedResult = await lmsVerify(message, tampered, publicKey);
   assert(!tamperedResult, 'Tampered LMS signature should fail');
   logPass('Tampered LMS signature is rejected');
-  logPass('RFC 8554 Appendix F LMS vector structure verified (HSS parsing in Phase 3)');
+  /* RFC 8554 Appendix F Test Case 1, through this lab's own lmsVerify.
+   *
+   * THIS LINE USED TO BE A BARE logPass. It printed
+   *   "RFC 8554 Appendix F LMS vector structure verified (HSS parsing in Phase 3)"
+   * with no assertion above it and no vector anywhere in this file — phase2.ts held
+   * zero hex literals, against 41 in phase1.ts, whose LM-OTS vector is real. So the
+   * gate published a green line for a check that did not exist, and the parenthesis
+   * sent a reader to Phase 3, which did not verify it either.
+   *
+   * Test Case 1 is a two-level HSS signature, and both of its levels are LMS
+   * signatures this file can check directly:
+   *   sig[1] over the published message, under the leaf public key
+   *   sig[0] over the leaf public key, under the root public key
+   * Between them they exercise the auth path, computeRoot, the LM-OTS candidate
+   * public key, the Winternitz chain, coefficient and the checksum. */
+  const tc1Pub = hexToBytes(TC1_PUBLIC_KEY_HEX);
+  const tc1Msg = hexToBytes(TC1_MESSAGE_HEX);
+  const tc1Sig = hexToBytes(TC1_SIGNATURE_HEX);
+  const be = (b: Uint8Array, o: number): number =>
+    ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+
+  assert(tc1Pub.length === 60, `RFC public key is ${tc1Pub.length} bytes, expected 60`);
+  assert(tc1Msg.length === 162, `RFC message is ${tc1Msg.length} bytes, expected 162`);
+  assert(tc1Sig.length === 2644, `RFC signature is ${tc1Sig.length} bytes, expected 2644`);
+
+  const rootPub: LMSPublicKey = {
+    typecode: be(tc1Pub, 4),
+    otsTypecode: be(tc1Pub, 8),
+    I: tc1Pub.slice(12, 28),
+    T1: tc1Pub.slice(28, 60),
+  };
+  const ROOT_SIG_LEN = 4 + 1124 + 4 + 5 * 32; // q + LM-OTS sig + LMS type + path, h=5
+  const rootSig = tc1Sig.slice(4, 4 + ROOT_SIG_LEN);
+  const leafPubOffset = 4 + ROOT_SIG_LEN;
+  const leafPub: LMSPublicKey = {
+    typecode: be(tc1Sig, leafPubOffset),
+    otsTypecode: be(tc1Sig, leafPubOffset + 4),
+    I: tc1Sig.slice(leafPubOffset + 8, leafPubOffset + 24),
+    T1: tc1Sig.slice(leafPubOffset + 24, leafPubOffset + 56),
+  };
+  const leafSig = tc1Sig.slice(leafPubOffset + 56);
+
+  assert(
+    await lmsVerify(tc1Msg, leafSig, leafPub),
+    'RFC 8554 Appendix F leaf LMS signature did not verify',
+  );
+  logPass('RFC 8554 Appendix F: leaf LMS signature verifies over the published message');
+
+  /* The root signs the child public key serialized per RFC 8554 Section 5.3, with no
+     level prefix. hss.ts prepended u32(levelUsed) here until 2026-10-20, which is
+     exactly why the full vector would not verify through hssVerify while both of its
+     LMS signatures verified through lmsVerify. */
+  const signedLeafPub = concatBytes(
+    u32(leafPub.typecode),
+    u32(leafPub.otsTypecode),
+    leafPub.I,
+    leafPub.T1,
+  );
+  assert(
+    await lmsVerify(signedLeafPub, rootSig, rootPub),
+    'RFC 8554 Appendix F root LMS signature over the leaf public key did not verify',
+  );
+  logPass('RFC 8554 Appendix F: root LMS signature verifies over the leaf public key');
+
+  /* Negative controls. Without these the two assertions above would also pass against
+     a verifier that returned true unconditionally. */
+  const bentMsg = Uint8Array.from(tc1Msg);
+  bentMsg[0] ^= 0x01;
+  assert(
+    !(await lmsVerify(bentMsg, leafSig, leafPub)),
+    'a flipped message byte still verified against the RFC vector',
+  );
+  const bentSig = Uint8Array.from(leafSig);
+  bentSig[bentSig.length - 1] ^= 0x01;
+  assert(
+    !(await lmsVerify(tc1Msg, bentSig, leafPub)),
+    'a flipped final auth-path byte still verified against the RFC vector',
+  );
+  logPass('RFC 8554 Appendix F: a bent message and a bent auth path are both rejected');
 
   console.log('Phase 2 gate passed');
 }
