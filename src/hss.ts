@@ -5,8 +5,24 @@ import type { LMSPrivateKey, LMSPublicKey } from './lms';
 const DEFAULT_ROOT_H = 5;
 const DEFAULT_LEAF_H = 10;
 
-function encodeLmsPublicKey(levelUsed: number, key: LMSPublicKey): Uint8Array {
-  return concatBytes(u32(levelUsed), u32(key.typecode), u32(key.otsTypecode), key.I, key.T1);
+/** Levels in the hierarchy, L in RFC 8554. This implementation is fixed at two: a
+ *  root tree that signs leaf-tree public keys, and leaf trees that sign messages.
+ *  Both the Nspk a signature carries and the Nspk a verifier demands are derived
+ *  from this one constant, so the writer and the reader cannot drift apart. */
+const HSS_LEVELS = 2;
+
+/**
+ * The message a parent tree signs: the child's LMS public key, serialized exactly as
+ * RFC 8554 Section 5.3 defines it — u32(LMS type) || u32(LM-OTS type) || I || T[1].
+ *
+ * This used to prepend u32(levelUsed), which is why RFC 8554's own Appendix F Test
+ * Case 1 would not verify through `hssVerify` while BOTH of its LMS signatures verify
+ * through `lmsVerify`. The prefix was also redundant: the parent's LMS signature
+ * carries its own `q`, which already identifies which leaf signed this public key, so
+ * the level was bound twice and the second binding was the non-conformant one.
+ */
+function encodeLmsPublicKey(key: LMSPublicKey): Uint8Array {
+  return concatBytes(u32(key.typecode), u32(key.otsTypecode), key.I, key.T1);
 }
 
 function hFromLmsTypecode(typecode: number): number {
@@ -25,7 +41,11 @@ export interface HSSPrivateKey {
   activeLeafPublicKey: LMSPublicKey;
   rootSignatureOfLeaf: Uint8Array;
   levelUsed: number;
-  maxLevels: number;
+  /** How many leaf TREES the root can certify: 1 << rootH, so 32 at the default.
+   *  Named `maxLevels` until 2026-10-20, which reads like L in RFC 8554 and is a
+   *  completely different number: that name is why this field's value minus one
+   *  was written as an Nspk, where it is 31 rather than 1. */
+  leafTreeCount: number;
   leafHeight: number;
 }
 
@@ -68,7 +88,7 @@ export async function hssKeygen(
 
   onProgress?.('Signing leaf public key with root tree', 92);
   const { signature: rootSignatureOfLeaf } = await lmsSign(
-    encodeLmsPublicKey(0, activeLeafPublicKey),
+    encodeLmsPublicKey(activeLeafPublicKey),
     rootLMSKey,
   );
 
@@ -81,11 +101,11 @@ export async function hssKeygen(
       activeLeafPublicKey,
       rootSignatureOfLeaf,
       levelUsed: 0,
-      maxLevels: 1 << rootH,
+      leafTreeCount: 1 << rootH,
       leafHeight: leafH,
     },
     publicKey: {
-      L: 2,
+      L: HSS_LEVELS,
       rootLMSPublicKey: rootPublicKey,
     },
   };
@@ -96,7 +116,7 @@ async function rotateLeafIfNeeded(privateKey: HSSPrivateKey): Promise<void> {
     return;
   }
 
-  if (privateKey.levelUsed + 1 >= privateKey.maxLevels) {
+  if (privateKey.levelUsed + 1 >= privateKey.leafTreeCount) {
     throw new Error('HSS exhausted: root key has no remaining leaf-tree slots');
   }
 
@@ -110,7 +130,7 @@ async function rotateLeafIfNeeded(privateKey: HSSPrivateKey): Promise<void> {
   });
 
   const { signature: nextRootSig } = await lmsSign(
-    encodeLmsPublicKey(nextLevel, nextLeafPublic),
+    encodeLmsPublicKey(nextLeafPublic),
     privateKey.rootLMSKey,
   );
 
@@ -126,7 +146,13 @@ export async function hssSign(message: Uint8Array, privateKey: HSSPrivateKey): P
   const leafSig = await lmsSign(message, privateKey.activeLeafLMSKey);
 
   return concatBytes(
-    u32(privateKey.levelUsed),
+    /* RFC 8554 Section 6.1: an HSS signature opens with Nspk, the number of signed
+       public keys it carries — L - 1, so 1 for this two-level hierarchy. It used to
+       carry `levelUsed`, the active leaf-tree index: a different quantity that merely
+       also equals 1 once the second leaf tree is in use, which is what made the bug
+       survive every round-trip test. The leaf index is recoverable from the root
+       signature's own q. */
+    u32(HSS_LEVELS - 1),
     privateKey.rootSignatureOfLeaf,
     u32(privateKey.activeLeafPublicKey.typecode),
     u32(privateKey.activeLeafPublicKey.otsTypecode),
@@ -141,19 +167,23 @@ export async function hssVerify(
   signature: Uint8Array,
   publicKey: HSSPublicKey,
 ): Promise<boolean> {
-  if (publicKey.L !== 2) {
+  if (publicKey.L !== HSS_LEVELS) {
     return false;
   }
 
   let offset = 0;
-  const levelUsed =
+  const nspk =
     (signature[offset] << 24) |
     (signature[offset + 1] << 16) |
     (signature[offset + 2] << 8) |
     signature[offset + 3];
   offset += 4;
 
-  if (levelUsed < 0 || levelUsed >= 0x7fffffff) {
+  /* RFC 8554 Section 6.2 step 1: a signature whose Nspk disagrees with the public
+     key's own level count is invalid. This read the field as a leaf-tree index and
+     accepted any non-negative value, so it could not reject a signature claiming the
+     wrong number of signed public keys. */
+  if (nspk !== publicKey.L - 1) {
     return false;
   }
 
@@ -201,7 +231,7 @@ export async function hssVerify(
 
   const leafSig = signature.slice(offset, offset + leafSigLen);
 
-  const rootSigMessage = encodeLmsPublicKey(levelUsed, leafPublicKey);
+  const rootSigMessage = encodeLmsPublicKey(leafPublicKey);
   const rootOk = await lmsVerify(rootSigMessage, rootSig, publicKey.rootLMSPublicKey);
   if (!rootOk) {
     return false;
