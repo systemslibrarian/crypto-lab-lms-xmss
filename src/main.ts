@@ -248,12 +248,18 @@ function setupLayout(): void {
 
         <section class="panel" id="exhibit-5" aria-labelledby="h2-ex5">
           <h2 id="h2-ex5">Exhibit 7: When Stateful Signatures Win</h2>
+<aside id="hash-research-note" role="note">
+  <h3>Hash construction and aggregate use: research note (26 October 2026)</h3>
+  <p>Reliable state is necessary, but does not by itself establish security. Select the exact hash variant and parameter set; account for message length and format, aggregate signature counts across keys, and the resulting hash-block and hash-call budgets. Correct randomizers, domain separation and implementation also matter.</p>
+  <p><a href="https://eprint.iacr.org/2026/2624">Guo, Cheng, Preneel and Wang, <em>Provable Security of SHA-256-Based LMS Revisited in the Ideal-Cipher Model</em></a> studies classical ideal-cipher-model bounds. <a href="https://eprint.iacr.org/2026/2635">Strenzke, <em>A Kelsey–Kohno Attack Variant against SHA-2 Message Digests in HSS/LMS and XMSS</em></a> studies attacks pooling signatures across keys, with very large data and computation and attacker-compatible message formats. Its attacks exclude SHAKE256 parameter sets; this is not a blanket security proof for SHAKE256.</p>
+  <p>These are theoretical, attack-model-conditional preprints, not a practical break or evidence of standards withdrawal. Their classical analyses do not establish a quantum security bound. They are separate from the live leaf-reuse forgery demonstrated here.</p>
+</aside>
           <div class="decision mono">
             Need PQ signatures?
             Yes -> Need unlimited signatures?
             Yes -> Use SLH-DSA (stateless)
             No -> Can you manage state reliably?
-            Yes -> LMS/XMSS (small signatures)
+            Yes -> Evaluate LMS/XMSS parameters and aggregate-use limits
             No -> Use stateless schemes
           </div>
           <ul class="bullets">
