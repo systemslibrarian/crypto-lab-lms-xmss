@@ -61,7 +61,7 @@ LMS/XMSS were deployed in real firmware and platform trust chains before the lat
 
 Why teams still pick LMS in those niches:
 
-- Security assumption is hash-based (collision/second-preimage resistance of SHA-256 family)
+- Security is hash-based, with construction-specific assumptions and aggregate-use limits (see the research note below)
 - Signature sizes are practical for many firmware and boot-chain contexts
 - Operational model matches bounded-signature workflows with strong process controls
 
@@ -109,3 +109,12 @@ npm run gate:phase4   # live index-reuse forgery is accepted by the real key
 *Part of the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
 
 *"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
+
+## Hash construction and aggregate-use research
+
+Reliable state is necessary but not sufficient. Deployment choices must identify the exact hash variant and parameter set, message length and accepted format, aggregate signature counts across keys, and the resulting hash-block/hash-call budgets, alongside randomizer generation, domain separation and implementation quality.
+
+- Guo, Cheng, Preneel and Wang, *Provable Security of SHA-256-Based LMS Revisited in the Ideal-Cipher Model*, [ePrint 2026/2624](https://eprint.iacr.org/2026/2624), sections 1.1–1.2: classical ideal-cipher-model bounds depend on aggregate internal-block and hash-call work.
+- Strenzke, *A Kelsey–Kohno Attack Variant against SHA-2 Message Digests in HSS/LMS and XMSS*, [ePrint 2026/2635](https://eprint.iacr.org/2026/2635), sections 1.5 and 4: multi-key pooling, message length/format and extremely large resource budgets matter. These attacks exclude SHAKE256 parameter sets; that exclusion is not a general security proof.
+
+These October 2026 preprints are theoretical and attack-model-conditional. They do not establish a practical break, a quantum security bound, or standards withdrawal. They are distinct from this lab's demonstrated leaf-reuse forgery.
