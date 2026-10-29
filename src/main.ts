@@ -327,7 +327,7 @@ function renderLeafGrid(): void {
     const usedClass = used.has(i) ? 'used' : 'fresh';
     const currentClass = i === current ? 'current' : '';
     const stateLabel = used.has(i) ? 'used' : i === current ? 'next signing index' : 'available';
-    fragments.push(`<button class="leaf ${usedClass} ${currentClass}" data-leaf="${i}" aria-label="Leaf ${i}: ${stateLabel}" title="Leaf ${i}: ${stateLabel}">${i % 10}</button>`);
+    fragments.push(`<button class="leaf ${usedClass} ${currentClass}" data-leaf="${i}" aria-label="${i % 10}: leaf ${i}, ${stateLabel}" title="Leaf ${i}: ${stateLabel}">${i % 10}</button>`);
   }
   grid.innerHTML = fragments.join('');
 }

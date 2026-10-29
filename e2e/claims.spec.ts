@@ -19,7 +19,9 @@ test('invalid q overrides preserve state and rollback burns a visible live leaf'
     'The live signer burned q=0',
     { timeout: 60_000 },
   );
-  await expect(page.locator('.leaf[data-leaf="0"]')).toHaveAttribute('aria-label', 'Leaf 0: used');
+  // The name now opens with the digit the leaf shows, so that the accessible
+  // name contains the visible text (axe label-content-name-mismatch).
+  await expect(page.locator('.leaf[data-leaf="0"]')).toHaveAttribute('aria-label', '0: leaf 0, used');
   await expect(qLine).toContainText('1');
   await expect(page.locator('#reach-plain')).toContainText(
     'Positions whose known value is at or before midpoint depth 127',
