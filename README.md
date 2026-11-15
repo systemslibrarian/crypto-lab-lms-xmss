@@ -52,12 +52,14 @@ Walk the seven exhibits: generate LM-OTS and LMS keys, see the one-way Winternit
 
 ## Real-World Usage
 
-LMS/XMSS were deployed in real firmware and platform trust chains before the latest lattice standards were finalized:
+LMS/XMSS are the stateful hash-based signatures standardised for firmware and software signing, and they appear in shipping platform trust chains:
 
-- Cisco firmware-signing paths
-- AWS Nitro-related signing and attestation paths
-- TPM 2.0 optional support tracks
+- **Cisco firmware signing**: Cisco signs the ROMMON bootloader with LMS (`LMS_SHA256_M24_H20` / `LMOTS_SHA256_N24_W4`) on Catalyst 9000 Smart Switches running IOS XE 26.1/26.2 ([Cisco Trustworthy Systems Guide, Post-Quantum Cryptography](https://www.cisco.com/c/en/us/td/docs/switches/lan/c9000/sec-crypto/tws/trustworthy-systems-guide/post-quantum-cryptography.html)) and on Cisco 8000 Series Secure Routers ([Cisco blog, 10 November 2026](https://blogs.cisco.com/networking/safeguard-your-wan-from-quantum-threats-part-2-the-cnsa-2-0-blueprint)).
+- **TCG Algorithm Registry**: identifiers `TPM_ALG_LMS` (0x0070) and `TPM_ALG_XMSS` (0x0071), referencing SP 800-208, were added in Revision 1.33 (March 2023) and are retained in Version 2.0 (July 2025) ([TCG Algorithm Registry](https://trustedcomputinggroup.org/resource/tcg-algorithm-registry/)). The TPM 2.0 Library Part 2 (Version 185, March 2026) lists only algorithms the Library currently supports, and LMS/XMSS are not yet among them ([TPM 2.0 Library Specification](https://trustedcomputinggroup.org/resource/tpm-library-specification/)).
+- **CNSA 2.0** (NSA, updated May 2025): the software- and firmware-signing algorithms are those of NIST SP 800-208, with LMS SHA-256/192 recommended ([CSA: Announcing CNSA 2.0](https://media.defense.gov/2025/May/30/2003728741/-1/-1/0/CSA_CNSA_2.0_ALGORITHMS.PDF)). [NIST SP 800-208](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-208.pdf) (October 2020) names firmware updates for long-lived constrained devices as the motivating application; [RFC 8554](https://www.rfc-editor.org/rfc/rfc8554.html) specifies LMS/HSS.
 - HSM and long-term-signature ecosystems where auditable state is feasible
+
+*Deployment claims reviewed 15 November 2026.* An earlier unsourced item, "AWS Nitro-related signing and attestation paths", was removed: AWS documents Nitro Enclaves attestation documents as COSE_Sign1 objects signed with ECDSA P-384 under the AWS Nitro Attestation PKI ([Verifying the root of trust](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html)), and no AWS source describes an LMS/HSS or XMSS signing or attestation path.
 
 Why teams still pick LMS in those niches:
 

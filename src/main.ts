@@ -265,7 +265,7 @@ function setupLayout(): void {
           <ul class="bullets">
             <li>Best fit: firmware, boot chains, root code-signing ceremonies, HSM-bound flows.</li>
             <li>Avoid for general web signatures and distributed unconstrained signers.</li>
-            <li>Real deployments: Cisco firmware, AWS Nitro paths, TPM 2.0 optional support.</li>
+            <li>Real deployments: Cisco LMS-signed ROMMON bootloaders (Catalyst 9000 Smart Switches, 8000 Series Secure Routers); TCG Algorithm Registry identifiers TPM_ALG_LMS and TPM_ALG_XMSS (not yet in the TPM 2.0 Library's supported-algorithm table); CNSA 2.0 software- and firmware-signing algorithms (SP 800-208).</li>
           </ul>
           <p class="muted">Cross-labs: crypto-lab-sphincs-ledger, crypto-lab-dilithium-seal, crypto-lab-falcon-seal, crypto-lab-hybrid-sign.</p>
         </section>
