@@ -179,10 +179,11 @@ export async function hssVerify(
     signature[offset + 3];
   offset += 4;
 
-  /* RFC 8554 Section 6.2 step 1: a signature whose Nspk disagrees with the public
-     key's own level count is invalid. This read the field as a leaf-tree index and
-     accepted any non-negative value, so it could not reject a signature claiming the
-     wrong number of signed public keys. */
+  /* RFC 8554 Section 6.3, the first parsing check: a signature whose Nspk
+     disagrees with the public key's own level count is invalid. This read the
+     field as a leaf-tree index and accepted any non-negative value, so it
+     could not reject a signature claiming the wrong number of signed public
+     keys. */
   if (nspk !== publicKey.L - 1) {
     return false;
   }
