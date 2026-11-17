@@ -265,7 +265,7 @@ function setupLayout(): void {
           <ul class="bullets">
             <li>Best fit: firmware, boot chains, root code-signing ceremonies, HSM-bound flows.</li>
             <li>Avoid for general web signatures and distributed unconstrained signers.</li>
-            <li>Real deployments: Cisco LMS-signed ROMMON bootloaders (Catalyst 9000 Smart Switches, 8000 Series Secure Routers); TCG Algorithm Registry identifiers TPM_ALG_LMS and TPM_ALG_XMSS (not yet in the TPM 2.0 Library's supported-algorithm table); CNSA 2.0 software- and firmware-signing algorithms (SP 800-208).</li>
+            <li>Real deployments: Cisco LMS-signed ROMMON bootloaders (Catalyst 9000 Smart Switches, 8000 Series Secure Routers); TCG Algorithm Registry identifiers TPM_ALG_LMS and TPM_ALG_XMSS (not yet in the TPM 2.0 Library's supported-algorithm table); CNSA 2.0 approves LMS/XMSS (SP 800-208) for signing firmware and software, under &ldquo;Algorithms Allowed in Specific Applications&rdquo; — not as the only option: NSA&rsquo;s CNSA 2.0 FAQ (Ver. 2.2, October 2026) lists ML-DSA for &ldquo;digital signatures in any use case, including signing firmware and software&rdquo; and states that &ldquo;Validated ML-DSA is approved for all signing use cases&rdquo;; LMS and XMSS are what is available now, having &ldquo;been commercially available longer&rdquo;.</li>
           </ul>
           <p class="muted">Cross-labs: crypto-lab-sphincs-ledger, crypto-lab-dilithium-seal, crypto-lab-falcon-seal, crypto-lab-hybrid-sign.</p>
         </section>

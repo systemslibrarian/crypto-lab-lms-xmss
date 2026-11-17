@@ -29,3 +29,29 @@ test('invalid q overrides preserve state and rollback burns a visible live leaf'
   );
   await expect(page.locator('#reach-plain')).toContainText('not a sampled message');
 });
+
+test('the CNSA 2.0 line names ML-DSA, as the FAQ table does', async ({ page }) => {
+  /* The deployment bullet and README line 59 presented the SP 800-208 schemes
+   * as the CNSA 2.0 software- and firmware-signing algorithms, full stop. NSA's
+   * CNSA 2.0 and Quantum Computing FAQ (U/OO/6072712-26 | PP-26-3194 | October
+   * 2026 Ver. 2.2) puts ML-DSA under "General Purpose Algorithms" for "digital
+   * signatures in any use case, including signing firmware and software", and
+   * LMS/XMSS under "Algorithms Allowed in Specific Applications"; asked "Can I
+   * use ML-DSA for firmware or software signing?" it answers "Yes", adding
+   * "Validated ML-DSA is approved for all signing use cases" and that NSA wants
+   * the transition to "begin now (using LMS and XMSS) whenever possible" because
+   * those "have been commercially available longer".
+   *
+   * The sibling labs lms-ledger and harvest-timeline already say this. */
+  await page.goto('.');
+  const bullet = page.locator('li', { hasText: 'Real deployments' }).first();
+  const text = (await bullet.innerText()).replace(/\s+/g, ' ');
+
+  expect(text).toContain('ML-DSA');
+  expect(text).toContain('Validated ML-DSA is approved for all signing use cases');
+  expect(text).toContain('Algorithms Allowed in Specific Applications');
+  expect(text).toContain('Ver. 2.2, October 2026');
+  expect(text).toContain('been commercially available longer');
+  // The old formulation treated SP 800-208 as the whole answer.
+  expect(text).not.toContain('CNSA 2.0 software- and firmware-signing algorithms (SP 800-208)');
+});
